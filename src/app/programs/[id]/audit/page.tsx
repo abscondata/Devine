@@ -1,0 +1,773 @@
+﻿import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { ProtectedShell } from "@/components/protected-shell";
+
+const COMPLETED_READING_STATUSES = new Set(["complete"]);
+
+type CourseStatus = "completed" | "in_progress" | "not_started";
+
+function formatRule(block: {
+  minimum_courses_required: number | null;
+  minimum_credits_required: number | null;
+}) {
+  const parts: string[] = [];
+  if (block.minimum_courses_required !== null) {
+    parts.push(
+      `Minimum ${block.minimum_courses_required} course${block.minimum_courses_required === 1 ? "" : "s"}`
+    );
+  }
+  if (block.minimum_credits_required !== null) {
+    parts.push(`Minimum ${block.minimum_credits_required} credits`);
+  }
+  return parts.length ? parts.join(" and ") : "No requirement set";
+}
+
+function formatStatus(status: CourseStatus) {
+  if (status === "completed") return "Completed";
+  if (status === "in_progress") return "In progress";
+  return "Not started";
+}
+
+export default async function ProgramAuditPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  const { data: program } = await supabase
+    .from("programs")
+    .select("id, title, description")
+    .eq("id", id)
+    .single();
+
+  if (!program) {
+    notFound();
+  }
+
+  const { data: requirementBlocks } = await supabase
+    .from("requirement_blocks")
+    .select(
+      "id, title, description, category, minimum_courses_required, minimum_credits_required, position"
+    )
+    .eq("program_id", id)
+    .order("position", { ascending: true });
+
+  const { data: courses } = await supabase
+    .from("courses")
+    .select("id, title, code, credits_or_weight")
+    .eq("program_id", id)
+    .order("title");
+
+  const recommendedSequenceCodes = ["PHIL 501", "THEO 510", "HIST 520", "SCRP 530"];
+  const recommendedSequence = recommendedSequenceCodes.map((code) => ({
+    code,
+    course: (courses ?? []).find((course) => course.code === code) ?? null,
+  }));
+  const hasRecommendedSequence = recommendedSequence.some((item) => item.course);
+
+  const blockIds = requirementBlocks?.map((block) => block.id) ?? [];
+  const { data: mappings } = blockIds.length
+    ? await supabase
+        .from("course_requirement_blocks")
+        .select("requirement_block_id, course:course_id(id, title, code, credits_or_weight)")
+        .in("requirement_block_id", blockIds)
+    : { data: [] };
+
+  const courseIds = courses?.map((course) => course.id) ?? [];
+  const { data: modules } = courseIds.length
+    ? await supabase
+        .from("modules")
+        .select("id, course_id")
+        .in("course_id", courseIds)
+    : { data: [] };
+
+  const { data: prerequisiteMappings } = courseIds.length
+    ? await supabase
+        .from("course_prerequisites")
+        .select("course_id, prerequisite:prerequisite_course_id(id, title, code)")
+        .in("course_id", courseIds)
+    : { data: [] };
+
+  const prereqsByCourse = new Map<
+    string,
+    { id: string; title: string; code: string | null }[]
+  >();
+  prerequisiteMappings?.forEach((mapping) => {
+    if (!mapping.prerequisite) return;
+    const list = prereqsByCourse.get(mapping.course_id) ?? [];
+    list.push(mapping.prerequisite);
+    prereqsByCourse.set(mapping.course_id, list);
+  });
+
+  const moduleIds = modules?.map((module) => module.id) ?? [];
+  const { data: readings } = moduleIds.length
+    ? await supabase
+        .from("readings")
+        .select("id, module_id, status")
+        .in("module_id", moduleIds)
+    : { data: [] };
+
+  const { data: assignments } = moduleIds.length
+    ? await supabase
+        .from("assignments")
+        .select("id, module_id")
+        .in("module_id", moduleIds)
+    : { data: [] };
+
+  const assignmentIds = assignments?.map((assignment) => assignment.id) ?? [];
+  const { data: submissions } = assignmentIds.length
+    ? await supabase
+        .from("submissions")
+        .select("id, assignment_id, is_final, created_at")
+        .eq("user_id", user.id)
+        .in("assignment_id", assignmentIds)
+    : { data: [] };
+
+  const finalSubmissions = (submissions ?? []).filter((submission) => submission.is_final);
+  const finalSubmissionIds = finalSubmissions.map((submission) => submission.id);
+
+  const { data: critiques } = finalSubmissionIds.length
+    ? await supabase
+        .from("critiques")
+        .select("id, submission_id")
+        .in("submission_id", finalSubmissionIds)
+    : { data: [] };
+
+  const finalSet = new Set(finalSubmissions.map((item) => item.assignment_id));
+  const critiquesBySubmission = new Map<string, number>();
+  critiques?.forEach((critique) => {
+    critiquesBySubmission.set(
+      critique.submission_id,
+      (critiquesBySubmission.get(critique.submission_id) ?? 0) + 1
+    );
+  });
+
+  const assignmentStatus = new Map<
+    string,
+    { hasFinal: boolean; hasDraft: boolean; hasCritique: boolean }
+  >();
+  submissions?.forEach((submission) => {
+    const current = assignmentStatus.get(submission.assignment_id) ?? {
+      hasFinal: false,
+      hasDraft: false,
+      hasCritique: false,
+    };
+    if (submission.is_final) {
+      current.hasFinal = true;
+      if ((critiquesBySubmission.get(submission.id) ?? 0) > 0) {
+        current.hasCritique = true;
+      }
+    } else {
+      current.hasDraft = true;
+    }
+    assignmentStatus.set(submission.assignment_id, current);
+  });
+
+  const modulesByCourse = new Map<string, { id: string }[]>();
+  modules?.forEach((module) => {
+    const list = modulesByCourse.get(module.course_id) ?? [];
+    list.push(module);
+    modulesByCourse.set(module.course_id, list);
+  });
+
+  const readingsByModule = new Map<string, typeof readings>();
+  readings?.forEach((reading) => {
+    const list = readingsByModule.get(reading.module_id) ?? [];
+    list.push(reading);
+    readingsByModule.set(reading.module_id, list);
+  });
+
+  const assignmentsByModule = new Map<string, typeof assignments>();
+  assignments?.forEach((assignment) => {
+    const list = assignmentsByModule.get(assignment.module_id) ?? [];
+    list.push(assignment);
+    assignmentsByModule.set(assignment.module_id, list);
+  });
+
+  const moduleToCourse = new Map<string, string>();
+  modules?.forEach((module) => {
+    moduleToCourse.set(module.id, module.course_id);
+  });
+
+  const assignmentToCourse = new Map<string, string>();
+  assignments?.forEach((assignment) => {
+    const courseId = moduleToCourse.get(assignment.module_id);
+    if (courseId) {
+      assignmentToCourse.set(assignment.id, courseId);
+    }
+  });
+
+  const courseFinalDates = new Map<string, string>();
+  finalSubmissions.forEach((submission) => {
+    const courseId = assignmentToCourse.get(submission.assignment_id);
+    if (!courseId) return;
+    const existing = courseFinalDates.get(courseId);
+    if (!existing || new Date(submission.created_at) > new Date(existing)) {
+      courseFinalDates.set(courseId, submission.created_at);
+    }
+  });
+
+  const courseReadingStats = new Map<
+    string,
+    { totalReadings: number; completedReadings: number; skippedReadings: number }
+  >();
+  readings?.forEach((reading) => {
+    const courseId = moduleToCourse.get(reading.module_id);
+    if (!courseId) return;
+    const stats = courseReadingStats.get(courseId) ?? {
+      totalReadings: 0,
+      completedReadings: 0,
+      skippedReadings: 0,
+    };
+    stats.totalReadings += 1;
+    if (COMPLETED_READING_STATUSES.has(reading.status)) {
+      stats.completedReadings += 1;
+    }
+    if (reading.status === "skipped") {
+      stats.skippedReadings += 1;
+    }
+    courseReadingStats.set(courseId, stats);
+  });
+
+  const courseAssignmentStats = new Map<
+    string,
+    {
+      totalAssignments: number;
+      finalAssignments: number;
+      draftAssignments: number;
+      critiquedFinals: number;
+    }
+  >();
+  assignments?.forEach((assignment) => {
+    const courseId = moduleToCourse.get(assignment.module_id);
+    if (!courseId) return;
+    const stats = courseAssignmentStats.get(courseId) ?? {
+      totalAssignments: 0,
+      finalAssignments: 0,
+      draftAssignments: 0,
+      critiquedFinals: 0,
+    };
+    stats.totalAssignments += 1;
+    const status = assignmentStatus.get(assignment.id);
+    if (status?.hasFinal) {
+      stats.finalAssignments += 1;
+      if (status.hasCritique) {
+        stats.critiquedFinals += 1;
+      }
+    } else if (status?.hasDraft) {
+      stats.draftAssignments += 1;
+    }
+    courseAssignmentStats.set(courseId, stats);
+  });
+
+  const courseProgress = new Map<
+    string,
+    {
+      status: CourseStatus;
+      completedTasks: number;
+      totalTasks: number;
+      totalAssignments: number;
+      finalAssignments: number;
+      draftAssignments: number;
+      critiquedFinals: number;
+      unreadReadings: number;
+      skippedReadings: number;
+      missingFinals: number;
+    }
+  >();
+
+  (courses ?? []).forEach((course) => {
+    const courseModules = modulesByCourse.get(course.id) ?? [];
+    let totalTasks = 0;
+    let completedTasks = 0;
+
+    courseModules.forEach((module) => {
+      const moduleReadings = readingsByModule.get(module.id) ?? [];
+      const moduleAssignments = assignmentsByModule.get(module.id) ?? [];
+      totalTasks += moduleReadings.length + moduleAssignments.length;
+      completedTasks +=
+        moduleReadings.filter((reading) =>
+          COMPLETED_READING_STATUSES.has(reading.status)
+        ).length +
+        moduleAssignments.filter((assignment) => finalSet.has(assignment.id)).length;
+    });
+
+    let status: CourseStatus = "not_started";
+    if (totalTasks > 0 && completedTasks >= totalTasks) {
+      status = "completed";
+    } else if (completedTasks > 0) {
+      status = "in_progress";
+    }
+
+    courseProgress.set(course.id, {
+      status,
+      completedTasks,
+      totalTasks,
+      ...(courseAssignmentStats.get(course.id) ?? {
+        totalAssignments: 0,
+        finalAssignments: 0,
+        draftAssignments: 0,
+        critiquedFinals: 0,
+      }),
+      unreadReadings:
+        (courseReadingStats.get(course.id)?.totalReadings ?? 0) -
+        (courseReadingStats.get(course.id)?.completedReadings ?? 0),
+      skippedReadings: courseReadingStats.get(course.id)?.skippedReadings ?? 0,
+      missingFinals:
+        (courseAssignmentStats.get(course.id)?.totalAssignments ?? 0) -
+        (courseAssignmentStats.get(course.id)?.finalAssignments ?? 0),
+    });
+  });
+
+  const completionByCourse = new Map<string, boolean>();
+  courseProgress.forEach((progress, courseId) => {
+    completionByCourse.set(
+      courseId,
+      progress.totalTasks > 0 && progress.completedTasks >= progress.totalTasks
+    );
+  });
+
+  const courseStatusList = (courses ?? []).map((course) => ({
+    ...course,
+    status: courseProgress.get(course.id)?.status ?? "not_started",
+    finalDate: courseFinalDates.get(course.id) ?? null,
+  }));
+
+  const completedCourses = courseStatusList.filter(
+    (course) => course.status === "completed"
+  );
+  const inProgressCourses = courseStatusList.filter(
+    (course) => course.status === "in_progress"
+  );
+  const notStartedCourses = courseStatusList.filter(
+    (course) => course.status === "not_started"
+  );
+
+  const coursesByBlock = new Map<
+    string,
+    { id: string; title: string; code: string | null; credits_or_weight: number | null }[]
+  >();
+  mappings?.forEach((mapping) => {
+    if (!mapping.course || !("title" in mapping.course)) return;
+    const list = coursesByBlock.get(mapping.requirement_block_id) ?? [];
+    const course = mapping.course as unknown as {
+      id: string;
+      title: string;
+      code: string | null;
+      credits_or_weight: number | null;
+    };
+    list.push(course);
+    coursesByBlock.set(mapping.requirement_block_id, list);
+  });
+
+  const blockSummaries = (requirementBlocks ?? []).map((block) => {
+    const assignedCourses = coursesByBlock.get(block.id) ?? [];
+    const courseDetails = assignedCourses.map((course) => {
+      const progress = courseProgress.get(course.id) ?? {
+        status: "not_started" as CourseStatus,
+        completedTasks: 0,
+        totalTasks: 0,
+        totalAssignments: 0,
+        finalAssignments: 0,
+        draftAssignments: 0,
+        critiquedFinals: 0,
+        unreadReadings: 0,
+        skippedReadings: 0,
+        missingFinals: 0,
+      };
+      const prereqs = prereqsByCourse.get(course.id) ?? [];
+      const unmet = prereqs.filter(
+        (prereq) => !(completionByCourse.get(prereq.id) ?? false)
+      );
+      const readiness =
+        progress.status === "completed"
+          ? "Completed"
+          : unmet.length
+          ? "Not yet"
+          : "Ready now";
+      return {
+        ...course,
+        ...progress,
+        readiness,
+        unmetPrereqs: unmet,
+      };
+    });
+
+    const completedCourses = courseDetails.filter(
+      (course) => course.status === "completed"
+    );
+    const inProgressCourses = courseDetails.filter(
+      (course) => course.status === "in_progress"
+    );
+
+    const completedCredits = completedCourses.reduce(
+      (sum, course) => sum + (course.credits_or_weight ?? 0),
+      0
+    );
+
+    const missingCourses =
+      block.minimum_courses_required !== null
+        ? Math.max(0, block.minimum_courses_required - completedCourses.length)
+        : null;
+    const missingCredits =
+      block.minimum_credits_required !== null
+        ? Math.max(0, block.minimum_credits_required - completedCredits)
+        : null;
+
+    const isComplete =
+      (missingCourses === null || missingCourses === 0) &&
+      (missingCredits === null || missingCredits === 0);
+
+    const hasActivity =
+      completedCourses.length > 0 ||
+      completedCredits > 0 ||
+      inProgressCourses.length > 0;
+
+    const status = isComplete
+      ? "complete"
+      : hasActivity
+      ? "in progress"
+      : "incomplete";
+
+    const missingParts: string[] = [];
+    if (missingCourses !== null && missingCourses > 0) {
+      missingParts.push(
+        `Missing ${missingCourses} course${missingCourses === 1 ? "" : "s"}`
+      );
+    }
+    if (missingCredits !== null && missingCredits > 0) {
+      missingParts.push(`Missing ${missingCredits} credits`);
+    }
+
+    return {
+      block,
+      assignedCourses: courseDetails,
+      status,
+      missingText: missingParts.length ? missingParts.join(" · ") : null,
+    };
+  });
+
+  const completedBlocks = blockSummaries.filter(
+    (summary) => summary.status === "complete"
+  ).length;
+  const remainingBlocks = Math.max(0, blockSummaries.length - completedBlocks);
+
+  const categoryOrder = ["Foundations", "Core", "Advanced", "Capstone"];
+  const blocksByCategory = new Map<
+    string,
+    typeof blockSummaries
+  >();
+  blockSummaries.forEach((summary) => {
+    const category = summary.block.category ?? "Uncategorized";
+    const list = blocksByCategory.get(category) ?? [];
+    list.push(summary);
+    blocksByCategory.set(category, list);
+  });
+  const orderedCategories = [
+    ...categoryOrder.filter((category) => blocksByCategory.has(category)),
+    ...Array.from(blocksByCategory.keys()).filter(
+      (category) => !categoryOrder.includes(category)
+    ),
+  ];
+
+  return (
+    <ProtectedShell userEmail={user.email ?? null}>
+      <div className="space-y-10">
+        <header className="space-y-3">
+          <Link
+            href="/programs"
+            className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
+          >
+            Programs
+          </Link>
+          <div className="space-y-2">
+            <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
+              Program Audit
+            </p>
+            <h1 className="text-3xl font-semibold">{program.title}</h1>
+            <p className="text-sm text-[var(--muted)]">
+              {program.description ?? "No program description."}
+            </p>
+          </div>
+        </header>
+
+        <section className="space-y-4">
+          {hasRecommendedSequence ? (
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-4">
+              <div className="space-y-1">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Foundations Sequence
+                </p>
+                <h2 className="text-lg font-semibold">Recommended Order</h2>
+                <p className="text-sm text-[var(--muted)]">
+                  A guided progression for foundational formation. This sequence is
+                  recommended, not enforced as a hard prerequisite chain.
+                </p>
+              </div>
+              <ol className="space-y-2 text-sm text-[var(--muted)]">
+                {recommendedSequence.map((item, index) => (
+                  <li
+                    key={item.code}
+                    className="flex flex-wrap items-center gap-3"
+                  >
+                    <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                      {index + 1}
+                    </span>
+                    <span>
+                      {item.course
+                        ? `${item.code} — ${item.course.title}`
+                        : `${item.code} — Not yet created`}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-4 text-sm text-[var(--muted)]">
+            <div className="flex flex-wrap gap-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+              <span>Completed {completedCourses.length}</span>
+              <span>In progress {inProgressCourses.length}</span>
+              <span>Not started {notStartedCourses.length}</span>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Officially Complete
+                </p>
+                {completedCourses.length ? (
+                  <ul className="space-y-2">
+                    {completedCourses.map((course) => (
+                      <li key={course.id}>
+                        {course.code ? `${course.code} — ` : ""}
+                        {course.title}
+                        {course.finalDate ? (
+                          <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                            {" "}
+                            · Final{" "}
+                            {new Date(course.finalDate).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            })}
+                          </span>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>No completed courses yet.</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                  In Progress
+                </p>
+                {inProgressCourses.length ? (
+                  <ul className="space-y-2">
+                    {inProgressCourses.map((course) => (
+                      <li key={course.id}>
+                        {course.code ? `${course.code} — ` : ""}
+                        {course.title}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>No courses currently in progress.</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Not Yet Started
+                </p>
+                {notStartedCourses.length ? (
+                  <ul className="space-y-2">
+                    {notStartedCourses.map((course) => (
+                      <li key={course.id}>
+                        {course.code ? `${course.code} — ` : ""}
+                        {course.title}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>All courses have activity.</p>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm text-[var(--muted)]">
+            Program audit completion uses official course completion: all readings
+            marked complete (skipped readings do not count) and final submissions
+            for every assignment. Critiques are recommended but do not determine
+            completion.
+          </div>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Requirement Blocks</h2>
+            <Link
+              href={`/programs/${program.id}/requirements/new`}
+              className="text-sm text-[var(--muted)]"
+            >
+              Add requirement block
+            </Link>
+          </div>
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm text-[var(--muted)] space-y-2">
+            <p>
+              Devine College Core is defined by requirement blocks. A block is
+              satisfied only when its minimum courses and credits are complete.
+            </p>
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+              Blocks satisfied {completedBlocks}/{blockSummaries.length} ·
+              Remaining {remainingBlocks}
+            </p>
+          </div>
+
+          {blockSummaries.length ? (
+            <div className="space-y-8">
+              {orderedCategories.map((category) => {
+                const summaries = blocksByCategory.get(category) ?? [];
+                return (
+                  <div key={category} className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold">{category}</h3>
+                      <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                        {summaries.length} block{summaries.length === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                    <div className="space-y-6">
+                      {summaries.map(({ block, assignedCourses, status, missingText }) => (
+                        <div
+                          key={block.id}
+                          className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-4"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-4">
+                            <div>
+                              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                                {block.category ?? "Requirement"}
+                              </p>
+                              <h4 className="text-lg font-semibold">{block.title}</h4>
+                              <p className="text-sm text-[var(--muted)]">
+                                {block.description ?? "No description."}
+                              </p>
+                            </div>
+                            <div className="text-right space-y-1">
+                              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                                Status
+                              </p>
+                              <p className="text-sm font-semibold capitalize">{status}</p>
+                              <Link
+                                href={`/programs/${program.id}/requirements/${block.id}/edit`}
+                                className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
+                              >
+                                Edit block
+                              </Link>
+                            </div>
+                          </div>
+
+                          <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                            Requirement: {formatRule(block)}
+                          </div>
+                          <div className="text-sm text-[var(--muted)]">
+                            {status === "complete"
+                              ? "Satisfied."
+                              : missingText
+                              ? `Remaining: ${missingText}.`
+                              : "Incomplete."}
+                          </div>
+
+                          <div className="space-y-2">
+                            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                              Assigned Courses
+                            </p>
+                            {assignedCourses.length ? (
+                              <ul className="space-y-2 text-sm text-[var(--muted)]">
+                                {assignedCourses.map((course) => (
+                                  <li
+                                    key={course.id}
+                                    className="flex flex-wrap items-center justify-between gap-3"
+                                  >
+                                    <span>
+                                      {course.code ? `${course.code} — ` : ""}
+                                      {course.title}
+                                    </span>
+                                    <span className="text-xs uppercase tracking-[0.2em]">
+                                      {formatStatus(course.status)}
+                                    </span>
+                                    <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                                      {course.readiness}
+                                      {course.readiness === "Not yet" &&
+                                      course.unmetPrereqs?.length ? (
+                                        <>
+                                          {" "}
+                                          · Prereqs{" "}
+                                          {course.unmetPrereqs
+                                            .map((prereq) =>
+                                              prereq.code
+                                                ? `${prereq.code}`
+                                                : prereq.title
+                                            )
+                                            .join(", ")}
+                                        </>
+                                      ) : null}
+                                    </span>
+                                    <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                                      Finals {course.finalAssignments}/{course.totalAssignments}
+                                    </span>
+                                    {course.draftAssignments ? (
+                                      <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                                        Drafts {course.draftAssignments}
+                                      </span>
+                                    ) : null}
+                                    {course.finalAssignments ? (
+                                      <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                                        Critiqued {course.critiquedFinals}/{course.finalAssignments}
+                                      </span>
+                                    ) : null}
+                                    {course.status !== "completed" ? (
+                                      <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                                        Blockers
+                                        {course.unreadReadings > 0
+                                          ? ` ${course.unreadReadings} reading${course.unreadReadings === 1 ? "" : "s"}`
+                                          : ""}
+                                        {course.missingFinals > 0
+                                          ? ` ${course.missingFinals} final${course.missingFinals === 1 ? "" : "s"}`
+                                          : ""}
+                                        {course.skippedReadings > 0
+                                          ? ` ${course.skippedReadings} skipped`
+                                          : ""}
+                                      </span>
+                                    ) : null}
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="text-sm text-[var(--muted)]">
+                                No courses assigned to this block.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)]">
+              No requirement blocks yet. Add the first block to begin auditing.
+            </div>
+          )}
+        </section>
+      </div>
+    </ProtectedShell>
+  );
+}

@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f3f1ec;
+  --surface: #ffffff;
+  --surface-muted: #f8f6f1;
+  --text: #111111;
+  --muted: #5a5751;
+  --border: #d7d2c7;
+  --accent: #1f1e1c;
+  --accent-soft: #2d2b27;
+  --danger: #7a2b2b;
+}
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  letter-spacing: -0.01em;
+}
+
+* {
+  border-color: var(--border);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-serif);
+  letter-spacing: -0.015em;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.markdown {
+  font-family: var(--font-sans);
+  color: var(--text);
+  line-height: 1.7;
+}
+
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4 {
+  font-family: var(--font-serif);
+  margin: 0.5rem 0 0.75rem;
+}
+
+.markdown p {
+  margin: 0.6rem 0;
+}
+
+.markdown ul,
+.markdown ol {
+  padding-left: 1.25rem;
+  margin: 0.6rem 0;
+}
+
+.markdown li {
+  margin: 0.3rem 0;
+}
+
+.markdown code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--surface-muted);
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+}
