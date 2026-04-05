@@ -296,20 +296,64 @@ export default async function DashboardPage() {
   });
 
   const nextDue = enrichedWork[0] ?? null;
-  const dueThisWeek = enrichedWork.filter((a) => a.computedDue && isDueThisWeek(a.computedDue));
-  const overdueWork = enrichedWork.filter((a) => a.computedDue && isPast(a.computedDue));
+
+  // ─── THIS WEEK: unified view of all obligations due this week ───
+  type WeekItem = {
+    id: string;
+    title: string | null;
+    kind: "reading" | "writing";
+    courseCode: string | null;
+    date: Date;
+    overdue: boolean;
+    assignmentId?: string;
+  };
+
+  const thisWeekItems: WeekItem[] = [];
+
+  enrichedReadings.forEach((r) => {
+    if (r.targetDate && (isDueThisWeek(r.targetDate) || isPast(r.targetDate))) {
+      thisWeekItems.push({
+        id: r.id,
+        title: r.title,
+        kind: "reading",
+        courseCode: r.courseCode,
+        date: r.targetDate,
+        overdue: isPast(r.targetDate),
+      });
+    }
+  });
+
+  enrichedWork.forEach((a) => {
+    if (a.computedDue && (isDueThisWeek(a.computedDue) || isPast(a.computedDue))) {
+      thisWeekItems.push({
+        id: a.id,
+        title: a.title,
+        kind: "writing",
+        courseCode: a.courseCode,
+        date: a.computedDue,
+        overdue: isPast(a.computedDue),
+        assignmentId: a.id,
+      });
+    }
+  });
+
+  thisWeekItems.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  // Upcoming: all items NOT this week and NOT overdue, limited
+  const upcomingReadings = enrichedReadings.filter((r) => r.targetDate && !isPast(r.targetDate) && !isDueThisWeek(r.targetDate));
+  const upcomingWork = enrichedWork.filter((a) => a.computedDue && !isPast(a.computedDue) && !isDueThisWeek(a.computedDue));
 
   return (
     <ProtectedShell userEmail={user.email ?? null}>
       <div className="space-y-8">
 
         {/* ─── Term header ─── */}
-        <header className="space-y-1">
+        <header>
           <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
             {currentProgram.title}
           </p>
           {currentTerm ? (
-            <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+            <div className="mt-1 flex flex-wrap items-baseline gap-x-6 gap-y-1">
               <h1 className="text-3xl">{currentTerm.title}</h1>
               <div className="flex flex-wrap gap-x-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                 {schedule ? <span>Week {schedule.currentWeek} of {schedule.totalWeeks}</span> : null}
@@ -318,7 +362,7 @@ export default async function DashboardPage() {
               </div>
             </div>
           ) : (
-            <h1 className="text-3xl">College Home</h1>
+            <h1 className="mt-1 text-3xl">My Term</h1>
           )}
         </header>
 
@@ -326,94 +370,106 @@ export default async function DashboardPage() {
         {!currentTerm || !termCourseSummaries.length ? (
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
             <p className="text-sm text-[var(--muted)]">
-              No active term. Contact administration to set up a term with courses.
+              No active term. Set up a term with courses to begin.
             </p>
           </div>
         ) : null}
 
-        {/* ─── Active courses ─── */}
-        {termCourseSummaries.length > 0 ? (
-          <section className="space-y-4">
-            {termCourseSummaries.map((summary) => (
-              <div key={summary.course.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
-                {/* Course header */}
-                <Link
-                  href={`/courses/${summary.course.id}`}
-                  className="block p-5 transition hover:bg-[var(--surface-muted)]"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="space-y-1">
-                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                        {summary.course.code} · {summary.course.credits_or_weight} credits
-                      </p>
-                      <h2 className="text-xl font-semibold">{summary.course.title}</h2>
-                    </div>
-                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] shrink-0">
-                      {summary.isComplete
-                        ? "Complete"
-                        : `${summary.completedTasks} of ${summary.totalTasks} fulfilled`}
-                    </p>
-                  </div>
-                </Link>
-
-                {/* Current unit + next action */}
-                {summary.currentUnit ? (
-                  <div className="border-t border-[var(--border)] px-5 py-4 space-y-2">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                      <Link href={`/modules/${summary.currentUnit.id}`} className="text-sm font-semibold hover:text-[var(--accent-soft)]">
-                        Unit {summary.currentUnit.position + 1} of {summary.totalUnits}: {summary.currentUnit.title}
-                      </Link>
-                      <div className="flex flex-wrap gap-x-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                        <span>{summary.currentUnit.completedTasks} of {summary.currentUnit.totalTasks} fulfilled</span>
-                        {schedule?.unitSchedules.get(summary.currentUnit.id) ? (
-                          <span>Due {formatScheduleDate(schedule.unitSchedules.get(summary.currentUnit.id)!.endsAt)}</span>
-                        ) : null}
-                      </div>
-                    </div>
-                    {summary.nextAction ? (
+        {/* ─── This Week ─── */}
+        {thisWeekItems.length > 0 ? (
+          <section className="space-y-3">
+            <h2 className="text-lg">This Week</h2>
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
+              {thisWeekItems.map((item) => {
+                const inner = (
+                  <div className="flex items-center justify-between gap-4 px-5 py-3">
+                    <div className="space-y-0.5">
+                      <p className={`text-sm ${item.kind === "writing" ? "font-semibold" : "text-[var(--muted)]"}`}>{item.title}</p>
                       <p className="text-xs text-[var(--muted)]">
-                        Next: {summary.nextAction.title}
+                        {item.courseCode} · {item.kind === "reading" ? "Reading" : "Written work"}
                       </p>
-                    ) : null}
+                    </div>
+                    <span className={`text-xs uppercase tracking-[0.2em] shrink-0 ${item.overdue ? "text-[var(--danger)]" : "text-[var(--muted)]"}`}>
+                      {item.overdue ? "Overdue" : formatScheduleDate(item.date)}
+                    </span>
                   </div>
-                ) : summary.isComplete ? null : (
-                  <div className="border-t border-[var(--border)] px-5 py-4">
-                    <p className="text-xs text-[var(--muted)]">All units complete.</p>
-                  </div>
-                )}
-              </div>
-            ))}
+                );
+                return item.kind === "writing" && item.assignmentId ? (
+                  <Link key={item.id} href={`/assignments/${item.assignmentId}`} className="block transition hover:bg-[var(--surface-muted)]">
+                    {inner}
+                  </Link>
+                ) : (
+                  <div key={item.id}>{inner}</div>
+                );
+              })}
+            </div>
+          </section>
+        ) : currentTerm ? (
+          <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
+            <p className="text-sm text-[var(--muted)]">No obligations due this week.</p>
           </section>
         ) : null}
 
-        {/* ─── Reading queue (cross-course, with target dates) ─── */}
-        {enrichedReadings.length > 0 ? (
+        {/* ─── Courses ─── */}
+        {termCourseSummaries.length > 0 ? (
           <section className="space-y-3">
-            <h2 className="text-lg">Reading Queue</h2>
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
-              {enrichedReadings.slice(0, 8).map((r) => (
-                <div key={r.id} className="flex items-center justify-between gap-4 px-5 py-3">
-                  <div className="space-y-0.5">
-                    <p className="text-sm text-[var(--muted)]">{r.title}</p>
-                    <p className="text-xs text-[var(--muted)]">{r.courseCode}</p>
+            <h2 className="text-lg">Courses</h2>
+            <div className="space-y-3">
+              {termCourseSummaries.map((summary) => {
+                const unitSched = summary.currentUnit ? schedule?.unitSchedules.get(summary.currentUnit.id) : null;
+                return (
+                  <div key={summary.course.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
+                    <div className="p-5 space-y-3">
+                      <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div className="space-y-0.5">
+                          <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                            {summary.course.code} · {summary.course.credits_or_weight} cr
+                          </p>
+                          <h3 className="text-lg font-semibold">{summary.course.title}</h3>
+                        </div>
+                        <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] shrink-0">
+                          {summary.isComplete ? "Complete" : `${summary.completedTasks} of ${summary.totalTasks}`}
+                        </p>
+                      </div>
+                      {summary.currentUnit ? (
+                        <div className="flex flex-wrap items-center justify-between gap-4">
+                          <p className="text-sm text-[var(--muted)]">
+                            Unit {summary.currentUnit.position + 1}: {summary.currentUnit.title}
+                          </p>
+                          {unitSched ? (
+                            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                              Due {formatScheduleDate(unitSched.endsAt)}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      {summary.nextAction ? (
+                        <p className="text-xs text-[var(--muted)]">Next: {summary.nextAction.title}</p>
+                      ) : null}
+                    </div>
+                    <div className="border-t border-[var(--border)] flex divide-x divide-[var(--border)] text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                      <Link href={`/courses/${summary.course.id}`} className="flex-1 px-5 py-3 text-center transition hover:bg-[var(--surface-muted)] hover:text-[var(--text)]">
+                        Syllabus
+                      </Link>
+                      {summary.currentUnit ? (
+                        <Link href={`/modules/${summary.currentUnit.id}`} className="flex-1 px-5 py-3 text-center transition hover:bg-[var(--surface-muted)] hover:text-[var(--text)]">
+                          Continue unit
+                        </Link>
+                      ) : null}
+                    </div>
                   </div>
-                  {r.targetDate ? (
-                    <span className={`text-xs uppercase tracking-[0.2em] shrink-0 ${isPast(r.targetDate) ? "text-[var(--danger)]" : "text-[var(--muted)]"}`}>
-                      {isPast(r.targetDate) ? "Overdue" : formatScheduleDate(r.targetDate)}
-                    </span>
-                  ) : null}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         ) : null}
 
-        {/* ─── Writing queue (cross-course, with due dates) ─── */}
-        {enrichedWork.length > 0 ? (
+        {/* ─── Upcoming ─── */}
+        {(upcomingWork.length > 0 || upcomingReadings.length > 0) ? (
           <section className="space-y-3">
-            <h2 className="text-lg">Writing Queue</h2>
+            <h2 className="text-lg">Upcoming</h2>
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
-              {enrichedWork.slice(0, 8).map((a) => (
+              {upcomingWork.slice(0, 4).map((a) => (
                 <Link
                   key={a.id}
                   href={`/assignments/${a.id}`}
@@ -421,28 +477,27 @@ export default async function DashboardPage() {
                 >
                   <div className="space-y-0.5">
                     <p className="text-sm font-semibold">{a.title}</p>
-                    <p className="text-xs text-[var(--muted)]">
-                      {a.courseCode} · {a.assignment_type?.replace(/_/g, " ")}
-                    </p>
+                    <p className="text-xs text-[var(--muted)]">{a.courseCode} · {a.assignment_type?.replace(/_/g, " ")}</p>
                   </div>
                   {a.computedDue ? (
-                    <span className={`text-xs uppercase tracking-[0.2em] shrink-0 ${isPast(a.computedDue) ? "text-[var(--danger)]" : isDueThisWeek(a.computedDue) ? "text-[var(--text)] font-semibold" : "text-[var(--muted)]"}`}>
-                      {isPast(a.computedDue) ? "Overdue" : isDueThisWeek(a.computedDue) ? `Due ${formatScheduleDate(a.computedDue)}` : formatScheduleDate(a.computedDue)}
-                    </span>
+                    <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] shrink-0">{formatScheduleDate(a.computedDue)}</span>
                   ) : null}
                 </Link>
+              ))}
+              {upcomingReadings.slice(0, 4).map((r) => (
+                <div key={r.id} className="flex items-center justify-between gap-4 px-5 py-3">
+                  <div className="space-y-0.5">
+                    <p className="text-sm text-[var(--muted)]">{r.title}</p>
+                    <p className="text-xs text-[var(--muted)]">{r.courseCode} · Reading</p>
+                  </div>
+                  {r.targetDate ? (
+                    <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] shrink-0">{formatScheduleDate(r.targetDate)}</span>
+                  ) : null}
+                </div>
               ))}
             </div>
           </section>
         ) : null}
-
-        {/* ─── Quick links ─── */}
-        <section className="flex flex-wrap gap-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-          <Link href={`/programs/${currentProgram.id}/record`} className="hover:text-[var(--text)]">Academic record</Link>
-          <Link href={`/programs/${currentProgram.id}/audit`} className="hover:text-[var(--text)]">Degree audit</Link>
-          <Link href={`/programs/${currentProgram.id}/work`} className="hover:text-[var(--text)]">Submissions</Link>
-          <Link href="/courses" className="hover:text-[var(--text)]">Curriculum</Link>
-        </section>
       </div>
     </ProtectedShell>
   );

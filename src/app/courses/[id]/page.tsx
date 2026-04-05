@@ -321,74 +321,47 @@ export default async function CoursePage({
   return (
     <ProtectedShell userEmail={user.email ?? null}>
       <div className="space-y-10">
+        {/* ─── Course header ─── */}
         <header className="space-y-3">
-          <Link
-            href="/dashboard"
-            className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
-          >
-            College Home
+          <Link href="/dashboard" className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            My Term
           </Link>
           <div className="space-y-2">
-            {course.program?.id ? (
-              <Link
-                href={`/programs/${course.program.id}/audit`}
-                className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]"
-              >
-                {course.program?.title ?? "Program"}
-              </Link>
-            ) : (
-              <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
-                {course.program?.title ?? "Program"}
-              </p>
-            )}
+            <div className="flex flex-wrap gap-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+              <span>{course.code}</span>
+              {course.level ? <span>{course.level}</span> : null}
+              {course.credits_or_weight ? <span>{course.credits_or_weight} credits</span> : null}
+            </div>
             <h1 className="text-3xl">{course.title}</h1>
-            <p className="text-sm text-[var(--muted)]">
-              {course.description ?? ""}
-            </p>
-            {isFoundationCourse ? (
-              <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                Foundations Phase
-                {foundationLabel ? ` · Step ${foundationLabel} of 4` : ""}
-              </div>
-            ) : null}
-          </div>
-          <div className="flex flex-wrap gap-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-            <span>{completedTasks} of {totalTasks || 0} requirements fulfilled</span>
-            {totalHours ? (
-              <span>Estimated reading: {totalHours.toFixed(1)} hours</span>
-            ) : null}
-            <span>{finalAssignments} of {totalAssignments} final submissions</span>
-            <Link
-              href={`/courses/${course.id}/dossier`}
-              className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
-            >
-              Course dossier
-            </Link>
+            <p className="text-sm text-[var(--muted)]">{course.description ?? ""}</p>
           </div>
         </header>
 
-        {nextModule ? (
-          <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-2">
+        {/* ─── Your progress ─── */}
+        <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Your progress</p>
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              Current study
+              {isCourseComplete ? "Complete" : `${completedTasks} of ${totalTasks} fulfilled · ${finalAssignments} of ${totalAssignments} final submissions`}
             </p>
-            <p className="text-sm text-[var(--muted)]">
-              <Link
-                href={`/modules/${nextModule.id}`}
-                className="font-semibold text-[var(--text)]"
-              >
-                Unit {nextModule.position + 1}: {nextModule.title}
-              </Link>
-              {" "}— the earliest incomplete unit in this course.
-            </p>
-          </section>
-        ) : isCourseComplete ? (
-          <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
-            <p className="text-sm font-semibold text-[var(--text)]">
-              This course is officially complete.
-            </p>
-          </section>
-        ) : null}
+          </div>
+          {nextModule ? (
+            <Link href={`/modules/${nextModule.id}`} className="block rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4 space-y-1 transition hover:border-[var(--accent-soft)]">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <p className="text-sm font-semibold">Unit {nextModule.position + 1}: {nextModule.title}</p>
+                {(() => {
+                  const unitSched = schedule?.unitSchedules.get(nextModule.id);
+                  return unitSched ? (
+                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Due {formatScheduleDate(unitSched.endsAt)}</p>
+                  ) : null;
+                })()}
+              </div>
+              <p className="text-xs text-[var(--muted)]">Continue current unit</p>
+            </Link>
+          ) : isCourseComplete ? (
+            <p className="text-sm font-semibold text-[var(--text)]">All requirements fulfilled.</p>
+          ) : null}
+        </section>
 
         <section className="space-y-4">
           <h2 className="text-xl">Course of Study</h2>
