@@ -443,23 +443,16 @@ export default async function ProgramAuditPage({
 
   return (
     <ProtectedShell userEmail={user.email ?? null}>
-      <div className="space-y-10">
-        <header className="space-y-3">
-          <Link
-            href="/programs"
-            className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
-          >
-            Programs
-          </Link>
-          <div className="space-y-2">
-            <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
-              Program Audit
-            </p>
-            <h1 className="text-3xl font-semibold">{program.title}</h1>
-            <p className="text-sm text-[var(--muted)]">
-              {program.description ?? ""}
-            </p>
+      <div className="space-y-8">
+        <header className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            <Link href="/dashboard">My Term</Link>
           </div>
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            {program.title}
+          </p>
+          <h1 className="text-3xl">Degree Audit</h1>
+          {program.description ? <p className="text-sm text-[var(--muted)]">{program.description}</p> : null}
         </header>
 
         <section className="space-y-4">
@@ -469,7 +462,7 @@ export default async function ProgramAuditPage({
                 <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                   Foundations Sequence
                 </p>
-                <h2 className="text-lg font-semibold">Recommended Order</h2>
+                <h2 className="text-lg">Recommended Order</h2>
                 <p className="text-sm text-[var(--muted)]">
                   A guided progression for foundational formation. This sequence is
                   recommended, not enforced as a hard prerequisite chain.
@@ -600,7 +593,7 @@ export default async function ProgramAuditPage({
                 return (
                   <div key={category} className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold">{category}</h3>
+                      <h3 className="text-lg">{category}</h3>
                       <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                         {summaries.length} block{summaries.length === 1 ? "" : "s"}
                       </span>
@@ -616,7 +609,7 @@ export default async function ProgramAuditPage({
                               <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                                 {block.category ?? "Requirement"}
                               </p>
-                              <h4 className="text-lg font-semibold">{block.title}</h4>
+                              <h4 className="text-lg">{block.title}</h4>
                               <p className="text-sm text-[var(--muted)]">
                                 {block.description ?? ""}
                               </p>
