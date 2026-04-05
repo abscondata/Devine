@@ -106,6 +106,24 @@ export function formatScheduleDate(date: Date): string {
 }
 
 /**
+ * Returns the effective due date for written work.
+ * Priority: explicit due_at > computed from unit schedule > null.
+ * After schedule materialization, most assignments will have explicit due_at.
+ */
+export function getEffectiveDueDate(params: {
+  explicitDueAt: string | null;
+  unitSchedule: UnitSchedule | null;
+}): { date: Date; source: "explicit" | "computed" } | null {
+  if (params.explicitDueAt) {
+    return { date: new Date(params.explicitDueAt), source: "explicit" };
+  }
+  if (params.unitSchedule) {
+    return { date: params.unitSchedule.endsAt, source: "computed" };
+  }
+  return null;
+}
+
+/**
  * Returns true if the date is in the past.
  */
 export function isPast(date: Date): boolean {

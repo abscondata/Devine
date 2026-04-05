@@ -1689,6 +1689,40 @@ export async function revokeReviewLink(formData: FormData) {
   redirect("/admin/review-links");
 }
 
+export async function extendDeadline(formData: FormData) {
+  const assignmentId = normalizeText(formData.get("assignmentId"));
+  const newDueAt = normalizeText(formData.get("newDueAt"));
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  await requireAdminAccess(supabase, user.id);
+
+  if (!assignmentId || !newDueAt) {
+    redirect("/dashboard?error=" + encodeMessage("Assignment or date missing."));
+  }
+
+  const { error } = await supabase
+    .from("assignments")
+    .update({ due_at: new Date(newDueAt).toISOString() })
+    .eq("id", assignmentId);
+
+  if (error) {
+    redirect(`/assignments/${assignmentId}?error=${encodeMessage(error.message)}`);
+  }
+
+  revalidatePath(`/assignments/${assignmentId}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/term");
+  redirect(`/assignments/${assignmentId}`);
+}
+
 export async function setCurrentCourseEnrollment(formData: FormData) {
   const courseId = normalizeText(formData.get("courseId"));
   const programId = normalizeText(formData.get("programId"));
