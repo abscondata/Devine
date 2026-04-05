@@ -1,6 +1,35 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { signOut } from "@/lib/actions";
 import { createClient } from "@/lib/supabase/server";
+
+/**
+ * Resolves the authenticated user's program context.
+ * Priority: program ownership, then program membership (owner/admin/staff/member).
+ * Returns the program ID or null.
+ */
+async function resolveUserProgram(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string
+): Promise<string | null> {
+  // Check ownership first
+  const { data: owned } = await supabase
+    .from("programs")
+    .select("id")
+    .eq("owner_id", userId)
+    .order("created_at", { ascending: true })
+    .limit(1);
+  if (owned?.length) return owned[0].id;
+
+  // Fall back to membership
+  const { data: memberships } = await supabase
+    .from("program_members")
+    .select("program_id")
+    .eq("user_id", userId)
+    .limit(1);
+  if (memberships?.length) return memberships[0].program_id;
+
+  return null;
+}
 
 export async function ProtectedShell({
   userEmail,
@@ -14,15 +43,7 @@ export async function ProtectedShell({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: programs } = user
-    ? await supabase
-        .from("programs")
-        .select("id")
-        .order("created_at", { ascending: true })
-        .limit(1)
-    : { data: [] as { id: string }[] };
-
-  const programId = programs?.[0]?.id ?? null;
+  const programId = user ? await resolveUserProgram(supabase, user.id) : null;
   const recordHref = programId ? `/programs/${programId}/record` : "/programs";
   const workHref = programId ? `/programs/${programId}/work` : "/programs";
   const researchHref = programId

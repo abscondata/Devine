@@ -374,7 +374,7 @@ export const getModuleNextAction = (params: {
     return readingAction.kind === "incomplete"
       ? {
           title: `Complete reading: ${readingAction.reading.title}`,
-          reason: "Unread readings block module completion.",
+          reason: "Unread readings block unit completion.",
         }
       : {
           title: `Resolve skipped reading: ${readingAction.reading.title}`,
@@ -390,7 +390,7 @@ export const getModuleNextAction = (params: {
   });
   if (firstDraftOnlyAssignment) {
     return {
-      title: `Finalize assignment: ${firstDraftOnlyAssignment.title}`,
+      title: `Finalize: ${firstDraftOnlyAssignment.title}`,
       reason: "Drafts do not count toward official completion.",
     };
   }
@@ -400,8 +400,8 @@ export const getModuleNextAction = (params: {
   });
   if (firstMissingAssignment) {
     return {
-      title: `Draft assignment: ${firstMissingAssignment.title}`,
-      reason: "Assignments require a final submission to complete the module.",
+      title: `Begin: ${firstMissingAssignment.title}`,
+      reason: "Written work requires a final submission to complete the unit.",
     };
   }
   return null;

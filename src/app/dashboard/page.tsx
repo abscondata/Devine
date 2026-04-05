@@ -6,13 +6,14 @@ import {
   buildAssignmentStatusMap,
   getCourseStanding,
   getFinalAssignmentSet,
+  getModuleNextAction,
   getModuleStanding,
   getProgramRequirementSummary,
   getStandingLabel,
   getTranscriptLiteSummary,
   buildReadinessByCourse,
   selectRecommendedNextCourse,
-  getCurrentWorkSelection,
+  isReadingIncomplete,
   summarizeRequirementBlocks,
 } from "@/lib/academic-standing";
 import {
@@ -39,13 +40,44 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const { data: courses } = await supabase
-    .from("courses")
-    .select(
-      "id, title, code, description, credits_or_weight, level, sequence_position, program:programs(id, title)"
-    )
-    .eq("is_active", true)
-    .order("title");
+  // ─── RESOLVE CURRENT PROGRAM ───
+  // The user's program is determined by ownership, then membership.
+  // All Home state is scoped to this one program.
+  const { data: ownedPrograms } = await supabase
+    .from("programs")
+    .select("id, title")
+    .eq("owner_id", user.id)
+    .order("created_at", { ascending: true })
+    .limit(1);
+  let currentProgram = ownedPrograms?.[0] ?? null;
+  if (!currentProgram) {
+    const { data: memberships } = await supabase
+      .from("program_members")
+      .select("program_id")
+      .eq("user_id", user.id)
+      .limit(1);
+    if (memberships?.length) {
+      const { data: memberProgram } = await supabase
+        .from("programs")
+        .select("id, title")
+        .eq("id", memberships[0].program_id)
+        .single();
+      currentProgram = memberProgram;
+    }
+  }
+
+  // ─── PROGRAM-SCOPED DATA ───
+  // All course/module/reading/assignment data is filtered to currentProgram.
+  const { data: courses } = currentProgram
+    ? await supabase
+        .from("courses")
+        .select(
+          "id, title, code, description, credits_or_weight, level, sequence_position, program:programs(id, title)"
+        )
+        .eq("program_id", currentProgram.id)
+        .eq("is_active", true)
+        .order("sequence_position", { ascending: true })
+    : { data: null };
 
   const courseIds = courses?.map((course) => course.id) ?? [];
 
@@ -331,34 +363,80 @@ export default async function DashboardPage() {
   // CANONICAL TRUTH DERIVATION
   // Every display field on College Home derives from this block.
   // No zone may contradict another because they share these outputs.
+  // All state is scoped to currentProgram.
   // ═══════════════════════════════════════════════════════════════════
 
-  // 1. CURRENT COURSE: only prerequisite-valid courses are eligible.
-  const validCourseIds = new Set(
-    courseIds.filter((id) => {
-      const r = readinessByCourse.get(id);
-      return r?.status === "ready" || r?.status === "completed";
+  // 1. CURRENT COURSE — explicit selection, not inferred from global scan.
+  //    First prerequisite-valid incomplete course sorted by sequence_position.
+  //    This is the institutional current-course truth.
+  const activeCourse = courseSummaries
+    .filter((c) => {
+      if (c.isComplete) return false;
+      const r = readinessByCourse.get(c.id);
+      return r?.status === "ready";
     })
+    .sort((a, b) => (a.sequence_position ?? 9999) - (b.sequence_position ?? 9999))[0] ?? null;
+
+  // 2. CURRENT UNIT — first incomplete unit inside the active course only.
+  //    No cross-course scanning. No alphabetical fallback.
+  const activeCourseModules = activeCourse
+    ? moduleProgress
+        .filter((m) => m.course_id === activeCourse.id)
+        .sort((a, b) => a.position - b.position)
+    : [];
+  const currentUnit = activeCourseModules.find(
+    (m) => m.totalTasks > 0 && m.completedTasks < m.totalTasks
+  ) ?? null;
+  const activeCourseTotalUnits = activeCourseModules.length;
+
+  // 3. CURRENT UNIT readings, written work, next action — scoped to unit.
+  const currentUnitRawReadings = currentUnit
+    ? (readingsByModule.get(currentUnit.id) ?? [])
+    : [];
+  const currentUnitReadings = currentUnitRawReadings.filter(
+    (r) => isReadingIncomplete(r.status)
   );
-  const currentWork = getCurrentWorkSelection({
-    moduleProgress: moduleProgress.filter((m) => validCourseIds.has(m.course_id)),
-    coursesById,
-    readingsByModule,
-    assignmentsByModule,
-    assignmentStatus,
-    finalAssignmentIds: finalSet,
-  });
-  const currentUnit = currentWork.currentModule;
-  const activeCourse = currentUnit
-    ? courseSummaries.find((c) => c.id === currentUnit.course_id) ?? null
+  const currentUnitRawAssignments = currentUnit
+    ? (assignmentsByModule.get(currentUnit.id) ?? [])
+    : [];
+  const currentUnitWrittenWork = currentUnitRawAssignments.filter(
+    (a) => !finalSet.has(a.id)
+  );
+  const currentUnitHours = currentUnit
+    ? (readings ?? [])
+        .filter((r) => r.module_id === currentUnit.id)
+        .reduce((sum, r) => sum + (r.estimated_hours ?? 0), 0)
+    : 0;
+  const currentUnitStanding = currentUnit
+    ? getModuleStanding({
+        readings: currentUnitRawReadings as Parameters<typeof getModuleStanding>[0]["readings"],
+        assignments: currentUnitRawAssignments as Parameters<typeof getModuleStanding>[0]["assignments"],
+        assignmentStatus,
+      })
+    : null;
+  const nextAction = currentUnit
+    ? getModuleNextAction({
+        readings: currentUnitRawReadings as Parameters<typeof getModuleNextAction>[0]["readings"],
+        assignments: currentUnitRawAssignments as Parameters<typeof getModuleNextAction>[0]["assignments"],
+        assignmentStatus,
+      })
     : null;
 
-  // 2. COUNTS: if activeCourse exists it MUST count as in-progress,
-  //    even if getTranscriptLiteSummary classified it as "not started"
-  //    (which happens when completedTasks === 0).
-  const activeCourseIsInProgress = activeCourse && !activeCourse.isComplete;
+  // 4. LATER WORK in current course (units after the current one).
+  const laterCourseWork = activeCourse && currentUnit
+    ? (assignments ?? []).filter((a) => {
+        if (finalSet.has(a.id)) return false;
+        if (assignmentToCourse.get(a.id) !== activeCourse.id) return false;
+        const mod = modules?.find((m) => m.id === a.module_id);
+        return mod ? mod.position > currentUnit.position : false;
+      })
+    : [];
+
+  // 5. COUNTS — active course always counted as in-progress.
   const canonicalInProgressIds = new Set(inProgressCourseIds);
-  if (activeCourseIsInProgress) canonicalInProgressIds.add(activeCourse.id);
+  if (activeCourse && !activeCourse.isComplete) {
+    canonicalInProgressIds.add(activeCourse.id);
+  }
   const canonicalInProgressCount = canonicalInProgressIds.size;
   const creditsEarned = completedCourses.reduce(
     (sum, c) => sum + (c.credits_or_weight ?? 0), 0
@@ -370,45 +448,15 @@ export default async function DashboardPage() {
     (sum, b) => sum + (b.minimum_credits_required ?? 0), 0
   );
 
-  // 3. CURRENT UNIT detail.
-  const activeCourseTotalUnits = activeCourse
-    ? moduleProgress.filter((m) => m.course_id === activeCourse.id).length
-    : 0;
-  const currentUnitReadings = currentWork.currentReadings;
-  const currentUnitWrittenWork = currentWork.currentAssignments;
-  const currentUnitHours = currentUnit
-    ? (readings ?? [])
-        .filter((r) => r.module_id === currentUnit.id)
-        .reduce((sum, r) => sum + (r.estimated_hours ?? 0), 0)
-    : 0;
-  const currentUnitStanding = currentUnit
-    ? getModuleStanding({
-        readings: (readingsByModule.get(currentUnit.id) ?? []) as Parameters<typeof getModuleStanding>[0]["readings"],
-        assignments: (assignmentsByModule.get(currentUnit.id) ?? []) as Parameters<typeof getModuleStanding>[0]["assignments"],
-        assignmentStatus,
-      })
-    : null;
-  const nextAction = currentWork.nextAction;
-
-  // 4. LATER WORK in current course (units after the current one).
-  const laterCourseWork = activeCourse && currentUnit
-    ? (assignments ?? []).filter((a) => {
-        if (finalSet.has(a.id)) return false;
-        if (assignmentToCourse.get(a.id) !== activeCourse.id) return false;
-        const mod = moduleToCourse.get(a.module_id) === activeCourse.id
-          ? modules?.find((m) => m.id === a.module_id)
-          : null;
-        return mod ? mod.position > currentUnit.position : false;
-      })
-    : [];
-
-  // 5. IDENTITY FIELDS — enrollment and standing are separate concepts.
+  // 6. IDENTITY — enrollment is a fact, completion state is a fact.
+  //    "Academic standing" is not claimed because no formal standing
+  //    system exists. We report completion state truthfully.
   const allBlocksSatisfied = blockSummaries.every((s) => s.satisfied);
-  const enrollmentStatus = programSummaries.length ? "Enrolled" : "No program";
-  const academicStanding = allBlocksSatisfied
+  const enrollmentStatus = currentProgram ? "Enrolled" : "No program";
+  const completionState = allBlocksSatisfied
     ? "Program complete"
     : activeCourse || completedCourses.length > 0
-    ? "In good standing"
+    ? "Active"
     : "Not yet begun";
 
   return (
@@ -420,13 +468,13 @@ export default async function DashboardPage() {
           <div className="space-y-1">
             <h1 className="text-3xl">College Home</h1>
             <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
-              {programSummaries.length ? programSummaries[0].title : "Devine College"}
+              {currentProgram?.title ?? "Devine College"}
             </p>
           </div>
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
             <div className="flex flex-wrap gap-x-8 gap-y-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
               <span>Enrollment: {enrollmentStatus}</span>
-              <span>Standing: {academicStanding}</span>
+              <span>Completion: {completionState}</span>
               <span>Credits earned: {creditsEarned}{totalCreditsRequired ? ` of ${totalCreditsRequired}` : ""}</span>
               {creditsInProgress > 0 ? <span>Credits in progress: {creditsInProgress}</span> : null}
               <span>Courses: {completedCourses.length} complete, {canonicalInProgressCount} in progress</span>
