@@ -519,8 +519,40 @@ export default async function DashboardPage() {
             </div>
           </section>
         ) : (
-          <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 text-sm text-[var(--muted)]">
-            All current coursework is complete. See the curriculum sequence below for the next course of study.
+          <section className="space-y-4">
+            <h2 className="text-2xl">Current Enrollment</h2>
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 space-y-3">
+              {completedCourses.length > 0 ? (
+                <p className="text-sm text-[var(--muted)]">
+                  All active coursework is complete. See the curriculum sequence below for the next course of study.
+                </p>
+              ) : recommendedNext ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-[var(--muted)]">
+                    No course is currently in progress.
+                  </p>
+                  <Link
+                    href={`/courses/${recommendedNext.id}`}
+                    className="block rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4 transition hover:border-[var(--accent-soft)]"
+                  >
+                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                      Ready to begin
+                    </p>
+                    <p className="mt-1 text-lg font-semibold text-[var(--text)]">
+                      {recommendedNext.code ? `${recommendedNext.code} — ` : ""}
+                      {recommendedNext.title}
+                    </p>
+                    <p className="mt-1 text-sm text-[var(--muted)]">
+                      {recommendedNext.description ?? ""}
+                    </p>
+                  </Link>
+                </div>
+              ) : (
+                <p className="text-sm text-[var(--muted)]">
+                  No course is currently in progress.
+                </p>
+              )}
+            </div>
           </section>
         )}
 
@@ -537,11 +569,18 @@ export default async function DashboardPage() {
               {foundationCourses.map((course) => {
                 const isActive = activeCourse?.id === course.id;
                 const standing = readinessByCourse.get(course.id);
+                const prereqs = prereqsByCourse.get(course.id) ?? [];
+                const unmetPrereqs = prereqs.filter(
+                  (p) => !(completionByCourse.get(p.id) ?? false)
+                );
                 const standingLabel = standing?.status === "completed"
                   ? "Complete"
                   : standing?.status === "ready"
                   ? isActive ? "Currently enrolled" : "Prerequisites satisfied"
                   : "Prerequisites pending";
+                const blockerText = unmetPrereqs.length
+                  ? unmetPrereqs.map((p) => p.code ?? p.title).join(", ")
+                  : null;
 
                 return (
                   <Link
@@ -558,9 +597,16 @@ export default async function DashboardPage() {
                         <p className="text-xs text-[var(--muted)]">{course.credits_or_weight} credits</p>
                       ) : null}
                     </div>
-                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] shrink-0">
-                      {standingLabel}
-                    </p>
+                    <div className="text-right shrink-0 space-y-0.5">
+                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                        {standingLabel}
+                      </p>
+                      {blockerText && standing?.status !== "completed" && standing?.status !== "ready" ? (
+                        <p className="text-xs text-[var(--muted)]">
+                          Requires {blockerText}
+                        </p>
+                      ) : null}
+                    </div>
                   </Link>
                 );
               })}
@@ -666,37 +712,68 @@ export default async function DashboardPage() {
           </div>
         </section>
 
-        {/* ── Current obligations ── */}
-        {openAssignments.length ? (
-          <section className="space-y-4">
-            <h2 className="text-xl">Current Obligations</h2>
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
-              {openAssignments.slice(0, 8).map((assignment) => {
-                const courseId = assignmentToCourse.get(assignment.id);
-                const course = courseId ? coursesById.get(courseId) : null;
-                const isCurrentCourse = activeCourse?.id === courseId;
+        {/* ── Current obligations (scoped to active course) ── */}
+        {(() => {
+          const currentCourseAssignments = activeCourse
+            ? openAssignments.filter((a) => assignmentToCourse.get(a.id) === activeCourse.id)
+            : [];
+          const nextReadyCourseId = recommendedNext?.id;
+          const nextReadyAssignments = nextReadyCourseId && nextReadyCourseId !== activeCourse?.id
+            ? openAssignments.filter((a) => assignmentToCourse.get(a.id) === nextReadyCourseId).slice(0, 3)
+            : [];
+          const nextReadyCourse = nextReadyCourseId ? coursesById.get(nextReadyCourseId) : null;
 
-                return (
-                  <Link
-                    key={assignment.id}
-                    href={`/assignments/${assignment.id}`}
-                    className="flex flex-wrap items-center justify-between gap-4 px-5 py-3 transition hover:bg-[var(--surface-muted)]"
-                  >
-                    <div className="space-y-0.5">
-                      <p className="text-sm font-semibold">{assignment.title}</p>
-                      <p className="text-xs text-[var(--muted)]">
-                        {course?.code ?? ""}{course?.code ? " · " : ""}{assignment.assignment_type?.replace(/_/g, " ") ?? ""}
-                      </p>
-                    </div>
-                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] shrink-0">
-                      {isCurrentCourse ? "Current course" : "Future"}
-                    </p>
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
-        ) : null}
+          if (!currentCourseAssignments.length && !nextReadyAssignments.length) return null;
+
+          return (
+            <section className="space-y-4">
+              {currentCourseAssignments.length ? (
+                <div className="space-y-3">
+                  <h2 className="text-xl">Current Obligations</h2>
+                  <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
+                    {currentCourseAssignments.map((assignment) => (
+                      <Link
+                        key={assignment.id}
+                        href={`/assignments/${assignment.id}`}
+                        className="flex flex-wrap items-center justify-between gap-4 px-5 py-3 transition hover:bg-[var(--surface-muted)]"
+                      >
+                        <div className="space-y-0.5">
+                          <p className="text-sm font-semibold">{assignment.title}</p>
+                          <p className="text-xs text-[var(--muted)]">
+                            {activeCourse?.code ?? ""}{activeCourse?.code ? " · " : ""}{assignment.assignment_type?.replace(/_/g, " ") ?? ""}
+                          </p>
+                        </div>
+                        <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] shrink-0">
+                          {finalSet.has(assignment.id) ? "Final submitted" : "Outstanding"}
+                        </p>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {nextReadyAssignments.length ? (
+                <div className="space-y-3">
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                    Next ready course: {nextReadyCourse?.code ?? ""}{nextReadyCourse?.code ? " — " : ""}{nextReadyCourse?.title ?? ""}
+                  </p>
+                  <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
+                    {nextReadyAssignments.map((assignment) => (
+                      <div
+                        key={assignment.id}
+                        className="flex flex-wrap items-center justify-between gap-4 px-5 py-3 text-sm text-[var(--muted)]"
+                      >
+                        <p>{assignment.title}</p>
+                        <p className="text-xs uppercase tracking-[0.2em] shrink-0">
+                          {assignment.assignment_type?.replace(/_/g, " ") ?? ""}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </section>
+          );
+        })()}
       </div>
     </ProtectedShell>
   );
