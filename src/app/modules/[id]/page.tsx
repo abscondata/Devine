@@ -2,15 +2,15 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { updateReadingStatus } from "@/lib/actions";
+import {
+  buildAssignmentStatusMap,
+  getModuleNextAction,
+  getModuleStanding,
+  isReadingSkipped,
+  READING_STATUS_ALLOWED,
+} from "@/lib/academic-standing";
 import { ProtectedShell } from "@/components/protected-shell";
-
-const COMPLETED_READING_STATUSES = new Set(["complete"]);
-const readingStatuses = [
-  "not_started",
-  "in_progress",
-  "complete",
-  "skipped",
-];
+const readingStatuses = READING_STATUS_ALLOWED;
 
 export default async function ModulePage({
   params,
@@ -71,90 +71,25 @@ export default async function ModulePage({
         .in("submission_id", finalSubmissionIds)
     : { data: [] };
 
-  const finalSet = new Set(finalSubmissions.map((item) => item.assignment_id));
-  const critiquesBySubmission = new Map<string, number>();
-  critiques?.forEach((critique) => {
-    critiquesBySubmission.set(
-      critique.submission_id,
-      (critiquesBySubmission.get(critique.submission_id) ?? 0) + 1
-    );
-  });
-
-  const assignmentStatus = new Map<
-    string,
-    { hasFinal: boolean; hasDraft: boolean; hasCritique: boolean }
-  >();
-  submissions?.forEach((submission) => {
-    const current = assignmentStatus.get(submission.assignment_id) ?? {
-      hasFinal: false,
-      hasDraft: false,
-      hasCritique: false,
-    };
-    if (submission.is_final) {
-      current.hasFinal = true;
-      if ((critiquesBySubmission.get(submission.id) ?? 0) > 0) {
-        current.hasCritique = true;
-      }
-    } else {
-      current.hasDraft = true;
-    }
-    assignmentStatus.set(submission.assignment_id, current);
-  });
-  const completedReadings = (readings ?? []).filter((reading) =>
-    COMPLETED_READING_STATUSES.has(reading.status)
-  ).length;
-  const skippedReadings = (readings ?? []).filter(
-    (reading) => reading.status === "skipped"
-  ).length;
-  const unreadReadings = (readings?.length ?? 0) - completedReadings;
-  const completedAssignments = (assignments ?? []).filter((assignment) =>
-    finalSet.has(assignment.id)
-  ).length;
-  const totalTasks = (readings?.length ?? 0) + (assignments?.length ?? 0);
-  const completedTasks = completedReadings + completedAssignments;
+  const assignmentStatus = buildAssignmentStatusMap(submissions ?? [], critiques ?? []);
   const totalHours = (readings ?? []).reduce(
     (sum, reading) => sum + (reading.estimated_hours ?? 0),
     0
   );
-  const totalAssignments = assignments?.length ?? 0;
-  const finalAssignments = completedAssignments;
-  const draftAssignments = (assignments ?? []).filter((assignment) => {
-    const status = assignmentStatus.get(assignment.id);
-    return status?.hasDraft && !status?.hasFinal;
-  }).length;
-  const missingFinals = totalAssignments - finalAssignments;
-  const critiquedFinals = (assignments ?? []).filter((assignment) => {
-    const status = assignmentStatus.get(assignment.id);
-    return status?.hasFinal && status?.hasCritique;
-  }).length;
-
-  const firstUnreadReading = (readings ?? []).find(
-    (reading) => !COMPLETED_READING_STATUSES.has(reading.status)
-  );
-  const firstDraftOnlyAssignment = (assignments ?? []).find((assignment) => {
-    const status = assignmentStatus.get(assignment.id);
-    return status?.hasDraft && !status?.hasFinal;
+  const moduleStanding = getModuleStanding({
+    readings,
+    assignments,
+    assignmentStatus,
   });
-  const firstMissingAssignment = (assignments ?? []).find((assignment) => {
-    const status = assignmentStatus.get(assignment.id);
-    return !status?.hasDraft && !status?.hasFinal;
+  const { totalTasks, completedTasks, missingFinals, unreadReadings, skippedReadings } =
+    moduleStanding.completion;
+  const { totalAssignments, finalAssignments, draftAssignments, critiquedFinals } =
+    moduleStanding.assignmentSummary;
+  const nextAction = getModuleNextAction({
+    readings,
+    assignments,
+    assignmentStatus,
   });
-  const nextAction = firstUnreadReading
-    ? {
-        title: `Complete reading: ${firstUnreadReading.title}`,
-        reason: "Unread readings block module completion.",
-      }
-    : firstDraftOnlyAssignment
-    ? {
-        title: `Finalize assignment: ${firstDraftOnlyAssignment.title}`,
-        reason: "Drafts do not count toward official completion.",
-      }
-    : firstMissingAssignment
-    ? {
-        title: `Draft assignment: ${firstMissingAssignment.title}`,
-        reason: "Assignments require a final submission to complete the module.",
-      }
-    : null;
 
   return (
     <ProtectedShell userEmail={user.email ?? null}>
@@ -166,14 +101,22 @@ export default async function ModulePage({
           >
             {module.course?.title ?? "Course"}
           </Link>
-          <div className="space-y-2">
-            <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
-              {module.course?.program?.title ?? "Program"}
-            </p>
-            <h1 className="text-3xl font-semibold">{module.title}</h1>
-            <p className="text-sm text-[var(--muted)]">
-              {module.overview ?? "No module overview yet."}
-            </p>
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
+                {module.course?.program?.title ?? "Program"}
+              </p>
+              <h1 className="text-3xl font-semibold">{module.title}</h1>
+              <p className="text-sm text-[var(--muted)]">
+                {module.overview ?? "No module overview yet."}
+              </p>
+            </div>
+            <Link
+              href={`/modules/${module.id}/edit`}
+              className="text-sm text-[var(--muted)]"
+            >
+              Edit module
+            </Link>
           </div>
           <div className="flex flex-wrap gap-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
             <span>
@@ -202,7 +145,7 @@ export default async function ModulePage({
               readings do not count) and final submissions for every assignment.
               Critiques are recommended but do not determine completion.
             </p>
-            {unreadReadings === 0 && missingFinals === 0 ? (
+            {unreadReadings === 0 && skippedReadings === 0 && missingFinals === 0 ? (
               <p className="text-sm font-semibold text-[var(--text)]">
                 This module is officially complete.
               </p>
@@ -285,11 +228,17 @@ export default async function ModulePage({
                           <p className="text-sm text-[var(--muted)]">{meta}</p>
                         ) : null}
                       </div>
-                    <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                      Status {reading.status.replace(/_/g, " ")}
-                    </div>
+                      <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                        <span>Status {reading.status.replace(/_/g, " ")}</span>
+                        <Link
+                          href={`/readings/${reading.id}/edit`}
+                          className="text-[var(--muted)]"
+                        >
+                          Edit
+                        </Link>
+                      </div>
                   </div>
-                  {reading.status === "skipped" ? (
+                  {isReadingSkipped(reading.status) ? (
                     <p className="text-xs text-[var(--muted)]">
                       Administratively skipped (does not count toward completion).
                     </p>

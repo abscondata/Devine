@@ -2,18 +2,10 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAssignment } from "@/lib/actions";
+import { ASSIGNMENT_TYPE_ALLOWED } from "@/lib/assignment-structure";
 import { ProtectedShell } from "@/components/protected-shell";
 
-const assignmentTypes = [
-  "general",
-  "essay",
-  "analysis",
-  "exegesis",
-  "translation",
-  "problem_set",
-  "presentation",
-  "other",
-];
+const assignmentTypes = ASSIGNMENT_TYPE_ALLOWED;
 
 export default async function NewAssignmentPage({
   searchParams,

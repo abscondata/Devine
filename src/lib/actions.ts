@@ -1,9 +1,30 @@
 ﻿"use server";
 
+import crypto from "crypto";
+import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { generateCritique } from "@/lib/ai/critique";
+import { resolveReadingStatus } from "@/lib/academic-standing";
+import { SEQUENCE_POSITION_ERROR, validateSequencePosition } from "@/lib/course-sequence";
+import { REQUIREMENT_BLOCK_ERROR, validateRequirementBlockSelection } from "@/lib/course-requirements";
+import {
+  MODULE_POSITION_CONFLICT_ERROR,
+  READING_POSITION_CONFLICT_ERROR,
+  STRUCTURE_POSITION_ERROR,
+  validateStructurePosition,
+} from "@/lib/module-structure";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import {
+  ASSIGNMENT_TYPE_ERROR,
+  validateAssignmentType,
+} from "@/lib/assignment-structure";
+import { hashReviewToken } from "@/lib/review-access";
+import {
+  deriveThesisStatus,
+  summarizeThesisProject,
+} from "@/lib/thesis-governance";
 
 function encodeMessage(message: string) {
   return encodeURIComponent(message);
@@ -25,6 +46,40 @@ function normalizeInteger(value: FormDataEntryValue | null) {
   if (!raw) return null;
   const parsed = Number.parseInt(raw, 10);
   return Number.isNaN(parsed) ? null : parsed;
+}
+
+async function requireProgramAdmin(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  programId: string,
+  userId: string
+) {
+  const { data: program } = await supabase
+    .from("programs")
+    .select("id, owner_id")
+    .eq("id", programId)
+    .single();
+
+  if (!program) {
+    redirect("/dashboard?error=" + encodeMessage("Program not found."));
+  }
+
+  if (program.owner_id === userId) {
+    return program;
+  }
+
+  const { data: membership } = await supabase
+    .from("program_members")
+    .select("role")
+    .eq("program_id", programId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const allowedRoles = new Set(["owner", "admin", "staff"]);
+  if (!allowedRoles.has(membership?.role ?? "")) {
+    redirect("/dashboard?error=" + encodeMessage("Access denied."));
+  }
+
+  return program;
 }
 
 export async function signIn(formData: FormData) {
@@ -158,6 +213,10 @@ export async function createCourse(formData: FormData) {
     .getAll("prerequisiteIds")
     .map((value) => normalizeText(value))
     .filter(Boolean);
+  const requirementBlockIds = formData
+    .getAll("requirementBlockIds")
+    .map((value) => normalizeText(value))
+    .filter(Boolean);
   const isActive = status === "active";
 
   const supabase = await createClient();
@@ -169,33 +228,48 @@ export async function createCourse(formData: FormData) {
     redirect("/login");
   }
 
-  const { data: course, error } = await supabase
-    .from("courses")
-    .insert({
-      program_id: programId,
-      created_by: user.id,
-      title,
-      description: description || null,
-      code: code || null,
-      department_or_domain: departmentOrDomain || null,
-      credits_or_weight: creditsOrWeight,
-      level: level || null,
-      learning_outcomes: learningOutcomes || null,
-      syllabus: syllabus || null,
-      status,
-      domain_id: domainId || null,
-      is_active: isActive,
-    })
-    .select("id")
-    .single();
-
-  if (error) {
-    redirect(`/courses/new?error=${encodeMessage(error.message)}`);
+  const sequenceValidation = validateSequencePosition(formData.get("sequencePosition"));
+  if (sequenceValidation.error) {
+    redirect(`/courses/new?error=${encodeMessage(SEQUENCE_POSITION_ERROR)}`);
   }
 
-  if (course?.id && prerequisiteIds.length) {
+  const { data: programBlocks } = await supabase
+    .from("requirement_blocks")
+    .select("id")
+    .eq("program_id", programId);
+  const allowedBlockIds = new Set((programBlocks ?? []).map((block) => block.id));
+  const blockValidation = validateRequirementBlockSelection({
+    selectedIds: requirementBlockIds,
+    allowedIds: allowedBlockIds,
+  });
+  if (!blockValidation.valid) {
+    redirect(`/courses/new?error=${encodeMessage(blockValidation.error ?? REQUIREMENT_BLOCK_ERROR)}`);
+  }
+
+  const { data: courseId, error } = await supabase.rpc("create_course_with_blocks", {
+    p_program_id: programId,
+    p_title: title,
+    p_description: description || null,
+    p_code: code || null,
+    p_department_or_domain: departmentOrDomain || null,
+    p_credits_or_weight: creditsOrWeight,
+    p_level: level || null,
+    p_sequence_position: sequenceValidation.value,
+    p_learning_outcomes: learningOutcomes || null,
+    p_syllabus: syllabus || null,
+    p_status: status,
+    p_domain_id: domainId || null,
+    p_is_active: isActive,
+    p_requirement_block_ids: requirementBlockIds,
+  });
+
+  if (error || !courseId) {
+    redirect(`/courses/new?error=${encodeMessage(error?.message ?? "Course not created.")}`);
+  }
+
+  if (courseId && prerequisiteIds.length) {
     const uniquePrereqs = Array.from(new Set(prerequisiteIds)).filter(
-      (prereqId) => prereqId !== course.id
+      (prereqId) => prereqId !== courseId
     );
 
     if (uniquePrereqs.length) {
@@ -203,7 +277,7 @@ export async function createCourse(formData: FormData) {
         .from("course_prerequisites")
         .insert(
           uniquePrereqs.map((prereqId) => ({
-            course_id: course.id,
+            course_id: courseId,
             prerequisite_course_id: prereqId,
             created_by: user.id,
           }))
@@ -235,6 +309,10 @@ export async function updateCourse(formData: FormData) {
     .getAll("prerequisiteIds")
     .map((value) => normalizeText(value))
     .filter(Boolean);
+  const requirementBlockIds = formData
+    .getAll("requirementBlockIds")
+    .map((value) => normalizeText(value))
+    .filter(Boolean);
   const isActive = status === "active";
 
   const supabase = await createClient();
@@ -250,22 +328,48 @@ export async function updateCourse(formData: FormData) {
     redirect("/dashboard?error=" + encodeMessage("Course not found."));
   }
 
-  const { error } = await supabase
+  const sequenceValidation = validateSequencePosition(formData.get("sequencePosition"));
+  if (sequenceValidation.error) {
+    redirect(`/courses/${courseId}/edit?error=${encodeMessage(SEQUENCE_POSITION_ERROR)}`);
+  }
+
+  const { data: courseProgram } = await supabase
     .from("courses")
-    .update({
-      title,
-      description: description || null,
-      code: code || null,
-      department_or_domain: departmentOrDomain || null,
-      credits_or_weight: creditsOrWeight,
-      level: level || null,
-      learning_outcomes: learningOutcomes || null,
-      syllabus: syllabus || null,
-      status,
-      domain_id: domainId || null,
-      is_active: isActive,
-    })
-    .eq("id", courseId);
+    .select("program_id")
+    .eq("id", courseId)
+    .single();
+  if (!courseProgram?.program_id) {
+    redirect(`/courses/${courseId}/edit?error=${encodeMessage("Course program not found.")}`);
+  }
+  const { data: programBlocks } = await supabase
+    .from("requirement_blocks")
+    .select("id")
+    .eq("program_id", courseProgram.program_id);
+  const allowedBlockIds = new Set((programBlocks ?? []).map((block) => block.id));
+  const blockValidation = validateRequirementBlockSelection({
+    selectedIds: requirementBlockIds,
+    allowedIds: allowedBlockIds,
+  });
+  if (!blockValidation.valid) {
+    redirect(`/courses/${courseId}/edit?error=${encodeMessage(blockValidation.error ?? REQUIREMENT_BLOCK_ERROR)}`);
+  }
+
+  const { error } = await supabase.rpc("update_course_with_blocks", {
+    p_course_id: courseId,
+    p_title: title,
+    p_description: description || null,
+    p_code: code || null,
+    p_department_or_domain: departmentOrDomain || null,
+    p_credits_or_weight: creditsOrWeight,
+    p_level: level || null,
+    p_sequence_position: sequenceValidation.value,
+    p_learning_outcomes: learningOutcomes || null,
+    p_syllabus: syllabus || null,
+    p_status: status,
+    p_domain_id: domainId || null,
+    p_is_active: isActive,
+    p_requirement_block_ids: requirementBlockIds,
+  });
 
   if (error) {
     redirect(`/courses/${courseId}/edit?error=${encodeMessage(error.message)}`);
@@ -302,6 +406,8 @@ export async function createModule(formData: FormData) {
   const courseId = normalizeText(formData.get("courseId"));
   const title = normalizeText(formData.get("title"));
   const overview = normalizeText(formData.get("overview"));
+  const positionValidation = validateStructurePosition(formData.get("position"));
+  const positionValue = positionValidation.value;
 
   const supabase = await createClient();
   const {
@@ -312,22 +418,41 @@ export async function createModule(formData: FormData) {
     redirect("/login");
   }
 
-  const { data: latestModule } = await supabase
-    .from("modules")
-    .select("position")
-    .eq("course_id", courseId)
-    .order("position", { ascending: false })
-    .limit(1)
+  if (positionValidation.error || positionValue === null) {
+    redirect(`/modules/new?error=${encodeMessage(STRUCTURE_POSITION_ERROR)}`);
+  }
+
+  if (!courseId) {
+    redirect(`/modules/new?error=${encodeMessage("Course is required.")}`);
+  }
+
+  const { data: course } = await supabase
+    .from("courses")
+    .select("id")
+    .eq("id", courseId)
     .maybeSingle();
 
-  const nextPosition = (latestModule?.position ?? -1) + 1;
+  if (!course) {
+    redirect(`/modules/new?error=${encodeMessage("Course not found.")}`);
+  }
+
+  const { data: positionCollision } = await supabase
+    .from("modules")
+    .select("id")
+    .eq("course_id", courseId)
+    .eq("position", positionValue)
+    .maybeSingle();
+
+  if (positionCollision) {
+    redirect(`/modules/new?error=${encodeMessage(MODULE_POSITION_CONFLICT_ERROR)}`);
+  }
 
   const { error } = await supabase.from("modules").insert({
     course_id: courseId,
     created_by: user.id,
     title,
     overview: overview || null,
-    position: nextPosition,
+    position: positionValue,
   });
 
   if (error) {
@@ -336,6 +461,71 @@ export async function createModule(formData: FormData) {
 
   revalidatePath("/dashboard");
   redirect("/dashboard");
+}
+
+export async function updateModule(formData: FormData) {
+  const moduleId = normalizeText(formData.get("moduleId"));
+  const title = normalizeText(formData.get("title"));
+  const overview = normalizeText(formData.get("overview"));
+  const positionValidation = validateStructurePosition(formData.get("position"));
+  const positionValue = positionValidation.value;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (!moduleId) {
+    redirect(`/dashboard?error=${encodeMessage("Module not found.")}`);
+  }
+
+  if (positionValidation.error || positionValue === null) {
+    redirect(`/modules/${moduleId}/edit?error=${encodeMessage(STRUCTURE_POSITION_ERROR)}`);
+  }
+
+  const { data: moduleRecord } = await supabase
+    .from("modules")
+    .select("id, course_id")
+    .eq("id", moduleId)
+    .maybeSingle();
+
+  if (!moduleRecord) {
+    redirect(`/dashboard?error=${encodeMessage("Module not found.")}`);
+  }
+
+  const { data: collision } = await supabase
+    .from("modules")
+    .select("id")
+    .eq("course_id", moduleRecord.course_id)
+    .eq("position", positionValue)
+    .neq("id", moduleRecord.id)
+    .maybeSingle();
+
+  if (collision) {
+    redirect(`/modules/${moduleId}/edit?error=${encodeMessage(MODULE_POSITION_CONFLICT_ERROR)}`);
+  }
+
+  const { error } = await supabase
+    .from("modules")
+    .update({
+      title,
+      overview: overview || null,
+      position: positionValue,
+    })
+    .eq("id", moduleRecord.id);
+
+  if (error) {
+    redirect(`/modules/${moduleId}/edit?error=${encodeMessage(error.message)}`);
+  }
+
+  revalidatePath(`/modules/${moduleId}`);
+  revalidatePath(`/courses/${moduleRecord.course_id}`);
+  revalidatePath("/dashboard");
+  redirect(`/modules/${moduleId}`);
 }
 
 export async function reorderModule(formData: FormData) {
@@ -400,7 +590,8 @@ export async function createAssignment(formData: FormData) {
   const title = normalizeText(formData.get("title"));
   const instructions = normalizeText(formData.get("instructions"));
   const dueAt = normalizeText(formData.get("dueAt"));
-  const assignmentType = normalizeText(formData.get("assignmentType")) || "general";
+  const assignmentTypeValidation = validateAssignmentType(formData.get("assignmentType"));
+  const assignmentType = assignmentTypeValidation.value;
 
   const supabase = await createClient();
   const {
@@ -409,6 +600,24 @@ export async function createAssignment(formData: FormData) {
 
   if (!user) {
     redirect("/login");
+  }
+
+  if (assignmentTypeValidation.error || !assignmentType) {
+    redirect(`/assignments/new?error=${encodeMessage(ASSIGNMENT_TYPE_ERROR)}`);
+  }
+
+  if (!moduleId) {
+    redirect(`/assignments/new?error=${encodeMessage("Module is required.")}`);
+  }
+
+  const { data: moduleRecord } = await supabase
+    .from("modules")
+    .select("id")
+    .eq("id", moduleId)
+    .maybeSingle();
+
+  if (!moduleRecord) {
+    redirect(`/assignments/new?error=${encodeMessage("Module not found.")}`);
   }
 
   const { error } = await supabase.from("assignments").insert({
@@ -428,18 +637,13 @@ export async function createAssignment(formData: FormData) {
   redirect("/dashboard");
 }
 
-export async function createReading(formData: FormData) {
-  const moduleId = normalizeText(formData.get("moduleId"));
+export async function updateAssignment(formData: FormData) {
+  const assignmentId = normalizeText(formData.get("assignmentId"));
   const title = normalizeText(formData.get("title"));
-  const author = normalizeText(formData.get("author"));
-  const sourceType = normalizeText(formData.get("sourceType"));
-  const primaryOrSecondary = normalizeText(formData.get("primaryOrSecondary"));
-  const traditionOrEra = normalizeText(formData.get("traditionOrEra"));
-  const pagesOrLength = normalizeText(formData.get("pagesOrLength"));
-  const estimatedHours = normalizeNumber(formData.get("estimatedHours"));
-  const reference = normalizeText(formData.get("reference"));
-  const status = normalizeText(formData.get("status")) || "not_started";
-  const notes = normalizeText(formData.get("notes"));
+  const instructions = normalizeText(formData.get("instructions"));
+  const dueAt = normalizeText(formData.get("dueAt"));
+  const assignmentTypeValidation = validateAssignmentType(formData.get("assignmentType"));
+  const assignmentType = assignmentTypeValidation.value;
 
   const supabase = await createClient();
   const {
@@ -450,15 +654,180 @@ export async function createReading(formData: FormData) {
     redirect("/login");
   }
 
-  const { data: latestReading } = await supabase
-    .from("readings")
-    .select("position")
-    .eq("module_id", moduleId)
-    .order("position", { ascending: false })
-    .limit(1)
+  if (!assignmentId) {
+    redirect(`/dashboard?error=${encodeMessage("Assignment not found.")}`);
+  }
+
+  if (assignmentTypeValidation.error || !assignmentType) {
+    redirect(`/assignments/${assignmentId}/edit?error=${encodeMessage(ASSIGNMENT_TYPE_ERROR)}`);
+  }
+
+  const { data: assignmentRecord } = await supabase
+    .from("assignments")
+    .select("id, module_id")
+    .eq("id", assignmentId)
     .maybeSingle();
 
-  const nextPosition = (latestReading?.position ?? -1) + 1;
+  if (!assignmentRecord) {
+    redirect(`/dashboard?error=${encodeMessage("Assignment not found.")}`);
+  }
+
+  const { error } = await supabase
+    .from("assignments")
+    .update({
+      title,
+      instructions,
+      assignment_type: assignmentType,
+      due_at: dueAt ? new Date(dueAt).toISOString() : null,
+    })
+    .eq("id", assignmentRecord.id);
+
+  if (error) {
+    redirect(`/assignments/${assignmentId}/edit?error=${encodeMessage(error.message)}`);
+  }
+
+  revalidatePath(`/assignments/${assignmentId}`);
+  revalidatePath(`/modules/${assignmentRecord.module_id}`);
+  revalidatePath("/dashboard");
+  redirect(`/assignments/${assignmentId}`);
+}
+
+export async function updateReading(formData: FormData) {
+  const readingId = normalizeText(formData.get("readingId"));
+  const title = normalizeText(formData.get("title"));
+  const author = normalizeText(formData.get("author"));
+  const sourceType = normalizeText(formData.get("sourceType"));
+  const primaryOrSecondary = normalizeText(formData.get("primaryOrSecondary"));
+  const traditionOrEra = normalizeText(formData.get("traditionOrEra"));
+  const pagesOrLength = normalizeText(formData.get("pagesOrLength"));
+  const estimatedHours = normalizeNumber(formData.get("estimatedHours"));
+  const reference = normalizeText(formData.get("reference"));
+  const notes = normalizeText(formData.get("notes"));
+  const positionValidation = validateStructurePosition(formData.get("position"));
+  const positionValue = positionValidation.value;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (!readingId) {
+    redirect(`/dashboard?error=${encodeMessage("Reading not found.")}`);
+  }
+
+  if (positionValidation.error || positionValue === null) {
+    redirect(`/readings/${readingId}/edit?error=${encodeMessage(STRUCTURE_POSITION_ERROR)}`);
+  }
+
+  const { data: readingRecord } = await supabase
+    .from("readings")
+    .select("id, module_id")
+    .eq("id", readingId)
+    .maybeSingle();
+
+  if (!readingRecord) {
+    redirect(`/dashboard?error=${encodeMessage("Reading not found.")}`);
+  }
+
+  const { data: collision } = await supabase
+    .from("readings")
+    .select("id")
+    .eq("module_id", readingRecord.module_id)
+    .eq("position", positionValue)
+    .neq("id", readingRecord.id)
+    .maybeSingle();
+
+  if (collision) {
+    redirect(
+      `/readings/${readingId}/edit?error=${encodeMessage(READING_POSITION_CONFLICT_ERROR)}`
+    );
+  }
+
+  const { error } = await supabase
+    .from("readings")
+    .update({
+      title,
+      author: author || null,
+      source_type: sourceType || null,
+      primary_or_secondary: primaryOrSecondary || null,
+      tradition_or_era: traditionOrEra || null,
+      pages_or_length: pagesOrLength || null,
+      estimated_hours: estimatedHours,
+      reference_url_or_citation: reference || null,
+      notes: notes || null,
+      position: positionValue,
+    })
+    .eq("id", readingRecord.id);
+
+  if (error) {
+    redirect(`/readings/${readingId}/edit?error=${encodeMessage(error.message)}`);
+  }
+
+  revalidatePath(`/modules/${readingRecord.module_id}`);
+  redirect(`/modules/${readingRecord.module_id}`);
+}
+
+export async function createReading(formData: FormData) {
+  const moduleId = normalizeText(formData.get("moduleId"));
+  const title = normalizeText(formData.get("title"));
+  const author = normalizeText(formData.get("author"));
+  const sourceType = normalizeText(formData.get("sourceType"));
+  const primaryOrSecondary = normalizeText(formData.get("primaryOrSecondary"));
+  const traditionOrEra = normalizeText(formData.get("traditionOrEra"));
+  const pagesOrLength = normalizeText(formData.get("pagesOrLength"));
+  const estimatedHours = normalizeNumber(formData.get("estimatedHours"));
+  const reference = normalizeText(formData.get("reference"));
+  let status: string;
+  try {
+    status = resolveReadingStatus(normalizeText(formData.get("status")), "not_started");
+  } catch (error) {
+    redirect(`/readings/new?error=${encodeMessage("Invalid reading status.")}`);
+  }
+  const notes = normalizeText(formData.get("notes"));
+  const positionValidation = validateStructurePosition(formData.get("position"));
+  const positionValue = positionValidation.value;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (positionValidation.error || positionValue === null) {
+    redirect(`/readings/new?error=${encodeMessage(STRUCTURE_POSITION_ERROR)}`);
+  }
+
+  if (!moduleId) {
+    redirect(`/readings/new?error=${encodeMessage("Module is required.")}`);
+  }
+
+  const { data: moduleRecord } = await supabase
+    .from("modules")
+    .select("id")
+    .eq("id", moduleId)
+    .maybeSingle();
+
+  if (!moduleRecord) {
+    redirect(`/readings/new?error=${encodeMessage("Module not found.")}`);
+  }
+
+  const { data: readingCollision } = await supabase
+    .from("readings")
+    .select("id")
+    .eq("module_id", moduleId)
+    .eq("position", positionValue)
+    .maybeSingle();
+
+  if (readingCollision) {
+    redirect(`/readings/new?error=${encodeMessage(READING_POSITION_CONFLICT_ERROR)}`);
+  }
 
   const { error } = await supabase.from("readings").insert({
     module_id: moduleId,
@@ -473,7 +842,7 @@ export async function createReading(formData: FormData) {
     reference_url_or_citation: reference || null,
     status,
     notes: notes || null,
-    position: nextPosition,
+    position: positionValue,
   });
 
   if (error) {
@@ -486,8 +855,13 @@ export async function createReading(formData: FormData) {
 
 export async function updateReadingStatus(formData: FormData) {
   const readingId = normalizeText(formData.get("readingId"));
-  const status = normalizeText(formData.get("status"));
   const moduleId = normalizeText(formData.get("moduleId"));
+  let status: string;
+  try {
+    status = resolveReadingStatus(normalizeText(formData.get("status")));
+  } catch (error) {
+    redirect(`/modules/${moduleId}?error=${encodeMessage("Invalid reading status.")}`);
+  }
 
   const supabase = await createClient();
   const {
@@ -863,4 +1237,419 @@ export async function updateRequirementBlock(formData: FormData) {
 
   revalidatePath(`/programs/${programId}/audit`);
   redirect(`/programs/${programId}/audit`);
+}
+
+async function syncThesisDerivedStatus(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  projectId: string
+) {
+  const { data: project } = await supabase
+    .from("thesis_projects")
+    .select(
+      "id, program_id, course_id, title, research_question, governing_problem, thesis_claim, scope_statement, status, opened_at, candidacy_established_at, prospectus_locked_at, final_submitted_at"
+    )
+    .eq("id", projectId)
+    .single();
+
+  if (!project) return null;
+
+  const { data: milestones } = await supabase
+    .from("thesis_milestones")
+    .select(
+      "id, thesis_project_id, milestone_key, title, position, required, completed_at, submission_id"
+    )
+    .eq("thesis_project_id", projectId)
+    .order("position", { ascending: true });
+
+  const milestoneSubmissionIds = (milestones ?? [])
+    .map((milestone) => milestone.submission_id)
+    .filter((id): id is string => Boolean(id));
+
+  const { data: finalSubmissions } = milestoneSubmissionIds.length
+    ? await supabase
+        .from("submissions")
+        .select("id, is_final")
+        .in("id", milestoneSubmissionIds)
+        .eq("is_final", true)
+    : { data: [] as { id: string; is_final: boolean }[] };
+
+  const finalSubmissionIds = new Set(
+    (finalSubmissions ?? []).map((submission) => submission.id)
+  );
+
+  const summary = summarizeThesisProject({
+    project,
+    milestones: milestones ?? [],
+    finalSubmissionIds,
+  });
+
+  const derivedStatus = deriveThesisStatus(summary);
+  const updatePayload: Record<string, string> = {
+    status: derivedStatus,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (summary.candidacyReady && !project.candidacy_established_at) {
+    updatePayload.candidacy_established_at = new Date().toISOString();
+  }
+
+  const prospectusComplete =
+    summary.milestones.find((milestone) => milestone.key === "prospectus")
+      ?.completed ?? false;
+  if (prospectusComplete && !project.prospectus_locked_at) {
+    updatePayload.prospectus_locked_at = new Date().toISOString();
+  }
+
+  if (summary.finalThesisReady && !project.final_submitted_at) {
+    updatePayload.final_submitted_at = new Date().toISOString();
+  }
+
+  await supabase.from("thesis_projects").update(updatePayload).eq("id", projectId);
+  return summary;
+}
+
+export async function createThesisProject(formData: FormData) {
+  const programId = normalizeText(formData.get("programId"));
+  const courseId = normalizeText(formData.get("courseId"));
+  const title = normalizeText(formData.get("title"));
+  const researchQuestion = normalizeText(formData.get("researchQuestion"));
+  const governingProblem = normalizeText(formData.get("governingProblem"));
+  const thesisClaim = normalizeText(formData.get("thesisClaim"));
+  const scopeStatement = normalizeText(formData.get("scopeStatement"));
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (!programId || !courseId) {
+    redirect("/admin/thesis?error=" + encodeMessage("Program or course missing."));
+  }
+
+  await requireProgramAdmin(supabase, programId, user.id);
+
+  const { data: projectId, error } = await supabase.rpc(
+    "create_thesis_project_with_milestones",
+    {
+      p_program_id: programId,
+      p_course_id: courseId,
+      p_title: title,
+      p_research_question: researchQuestion,
+      p_governing_problem: governingProblem,
+      p_thesis_claim: thesisClaim || null,
+      p_scope_statement: scopeStatement,
+    }
+  );
+
+  if (error || !projectId) {
+    redirect("/admin/thesis?error=" + encodeMessage(error?.message ?? "Thesis project not created."));
+  }
+
+  revalidatePath("/admin/thesis");
+  redirect(`/admin/thesis/${projectId}`);
+}
+
+export async function updateThesisProject(formData: FormData) {
+  const projectId = normalizeText(formData.get("projectId"));
+  const title = normalizeText(formData.get("title"));
+  const researchQuestion = normalizeText(formData.get("researchQuestion"));
+  const governingProblem = normalizeText(formData.get("governingProblem"));
+  const thesisClaim = normalizeText(formData.get("thesisClaim"));
+  const scopeStatement = normalizeText(formData.get("scopeStatement"));
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (!projectId) {
+    redirect("/admin/thesis?error=" + encodeMessage("Thesis project not found."));
+  }
+
+  const { data: project } = await supabase
+    .from("thesis_projects")
+    .select("id, program_id")
+    .eq("id", projectId)
+    .single();
+
+  if (!project) {
+    redirect("/admin/thesis?error=" + encodeMessage("Thesis project not found."));
+  }
+
+  await requireProgramAdmin(supabase, project.program_id, user.id);
+
+  const { error } = await supabase
+    .from("thesis_projects")
+    .update({
+      title,
+      research_question: researchQuestion,
+      governing_problem: governingProblem,
+      thesis_claim: thesisClaim || null,
+      scope_statement: scopeStatement,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", projectId);
+
+  if (error) {
+    redirect(`/admin/thesis/${projectId}?error=${encodeMessage(error.message)}`);
+  }
+
+  revalidatePath(`/admin/thesis/${projectId}`);
+  revalidatePath(`/programs/${project.program_id}/thesis`);
+  redirect(`/admin/thesis/${projectId}`);
+}
+
+export async function updateThesisMilestone(formData: FormData) {
+  const projectId = normalizeText(formData.get("projectId"));
+  const milestoneId = normalizeText(formData.get("milestoneId"));
+  const action = normalizeText(formData.get("action"));
+  const submissionId = normalizeText(formData.get("submissionId"));
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (!projectId || !milestoneId) {
+    redirect("/admin/thesis?error=" + encodeMessage("Milestone not found."));
+  }
+
+  const { data: project } = await supabase
+    .from("thesis_projects")
+    .select("id, program_id, course_id")
+    .eq("id", projectId)
+    .single();
+
+  if (!project) {
+    redirect("/admin/thesis?error=" + encodeMessage("Thesis project not found."));
+  }
+
+  await requireProgramAdmin(supabase, project.program_id, user.id);
+
+  const { data: milestone } = await supabase
+    .from("thesis_milestones")
+    .select("id, milestone_key, required")
+    .eq("id", milestoneId)
+    .eq("thesis_project_id", projectId)
+    .single();
+
+  if (!milestone) {
+    redirect(`/admin/thesis/${projectId}?error=${encodeMessage("Milestone not found.")}`);
+  }
+
+  if (action === "clear") {
+    const { error } = await supabase
+      .from("thesis_milestones")
+      .update({ completed_at: null, submission_id: null })
+      .eq("id", milestoneId);
+
+    if (error) {
+      redirect(`/admin/thesis/${projectId}?error=${encodeMessage(error.message)}`);
+    }
+
+    await syncThesisDerivedStatus(supabase, projectId);
+    revalidatePath(`/admin/thesis/${projectId}`);
+    revalidatePath(`/programs/${project.program_id}/thesis`);
+    redirect(`/admin/thesis/${projectId}`);
+  }
+
+  if (!submissionId) {
+    redirect(
+      `/admin/thesis/${projectId}?error=${encodeMessage(
+        "Submission is required to complete this milestone."
+      )}`
+    );
+  }
+
+  const { data: submission } = await supabase
+    .from("submissions")
+    .select("id, assignment_id, is_final, user_id")
+    .eq("id", submissionId)
+    .single();
+
+  if (!submission) {
+    redirect(
+      `/admin/thesis/${projectId}?error=${encodeMessage(
+        "Submission does not belong to the RSYN 720 course."
+      )}`
+    );
+  }
+
+  const { data: assignment } = await supabase
+    .from("assignments")
+    .select("id, module_id")
+    .eq("id", submission.assignment_id)
+    .single();
+
+  if (!assignment) {
+    redirect(
+      `/admin/thesis/${projectId}?error=${encodeMessage(
+        "Submission does not belong to the RSYN 720 course."
+      )}`
+    );
+  }
+
+  const { data: moduleRecord } = await supabase
+    .from("modules")
+    .select("id, course_id")
+    .eq("id", assignment.module_id)
+    .single();
+
+  if (!moduleRecord || moduleRecord.course_id !== project.course_id) {
+    redirect(
+      `/admin/thesis/${projectId}?error=${encodeMessage(
+        "Submission does not belong to the RSYN 720 course."
+      )}`
+    );
+  }
+
+  const { data: program } = await supabase
+    .from("programs")
+    .select("id, owner_id")
+    .eq("id", project.program_id)
+    .single();
+
+  if (!program || submission.user_id !== program.owner_id) {
+    redirect(
+      `/admin/thesis/${projectId}?error=${encodeMessage(
+        "Submission does not belong to the program owner."
+      )}`
+    );
+  }
+
+  const finalMilestones = new Set(["final_thesis", "final_synthesis_reflection"]);
+  if (finalMilestones.has(milestone.milestone_key) && !submission.is_final) {
+    redirect(
+      `/admin/thesis/${projectId}?error=${encodeMessage(
+        "Final milestones require a final locked submission."
+      )}`
+    );
+  }
+
+  if (milestone.required && !submissionId) {
+    redirect(
+      `/admin/thesis/${projectId}?error=${encodeMessage(
+        "Required milestones must be linked to a submission."
+      )}`
+    );
+  }
+
+  const { error } = await supabase
+    .from("thesis_milestones")
+    .update({
+      completed_at: new Date().toISOString(),
+      submission_id: submissionId,
+    })
+    .eq("id", milestoneId);
+
+  if (error) {
+    redirect(`/admin/thesis/${projectId}?error=${encodeMessage(error.message)}`);
+  }
+
+  await syncThesisDerivedStatus(supabase, projectId);
+  revalidatePath(`/admin/thesis/${projectId}`);
+  revalidatePath(`/programs/${project.program_id}/thesis`);
+  redirect(`/admin/thesis/${projectId}`);
+}
+
+export async function createReviewLink(formData: FormData) {
+  const programId = normalizeText(formData.get("programId"));
+  const expiresAt = normalizeText(formData.get("expiresAt"));
+  const note = normalizeText(formData.get("note"));
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (!programId) {
+    redirect("/admin/review-links?error=" + encodeMessage("Program not found."));
+  }
+
+  await requireProgramAdmin(supabase, programId, user.id);
+
+  const token = crypto.randomBytes(24).toString("base64url");
+  const tokenHash = hashReviewToken(token);
+  const expiresAtIso = expiresAt ? new Date(expiresAt).toISOString() : null;
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("review_links").insert({
+    token_hash: tokenHash,
+    program_id: programId,
+    expires_at: expiresAtIso,
+    note: note || null,
+  });
+
+  if (error) {
+    redirect(`/admin/review-links?error=${encodeMessage(error.message)}`);
+  }
+
+  const cookieStore = await cookies();
+  cookieStore.set("review_link_token", token, {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/admin/review-links",
+    maxAge: 300,
+  });
+
+  revalidatePath("/admin/review-links");
+  redirect("/admin/review-links?created=1");
+}
+
+export async function revokeReviewLink(formData: FormData) {
+  const linkId = normalizeText(formData.get("linkId"));
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (!linkId) {
+    redirect("/admin/review-links?error=" + encodeMessage("Review link not found."));
+  }
+
+  const admin = createAdminClient();
+  const { data: link } = await admin
+    .from("review_links")
+    .select("id, program_id")
+    .eq("id", linkId)
+    .single();
+
+  if (!link) {
+    redirect("/admin/review-links?error=" + encodeMessage("Review link not found."));
+  }
+
+  await requireProgramAdmin(supabase, link.program_id, user.id);
+
+  const { error } = await admin
+    .from("review_links")
+    .update({ revoked_at: new Date().toISOString() })
+    .eq("id", linkId);
+
+  if (error) {
+    redirect(`/admin/review-links?error=${encodeMessage(error.message)}`);
+  }
+
+  revalidatePath("/admin/review-links");
+  redirect("/admin/review-links");
 }

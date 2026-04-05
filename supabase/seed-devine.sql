@@ -210,6 +210,7 @@ insert into courses (
   department_or_domain,
   credits_or_weight,
   level,
+  sequence_position,
   learning_outcomes,
   syllabus,
   status,
@@ -224,6 +225,35 @@ select program.id,
        seed.department_or_domain,
        seed.credits,
        seed.level,
+       case seed.code
+         when 'PHIL 501' then 10
+         when 'PHIL 610' then 20
+         when 'PHIL 620' then 30
+         when 'PHIL 630' then 40
+         when 'THEO 510' then 10
+         when 'HIST 520' then 10
+         when 'PATR 610' then 20
+         when 'HIST 630' then 30
+         when 'HIST 640' then 40
+         when 'SCRP 530' then 10
+         when 'SCRP 630' then 20
+         when 'SCRP 640' then 30
+         when 'SCRP 650' then 40
+         when 'CONC 620' then 10
+         when 'ECCL 630' then 20
+         when 'LIT 640' then 30
+         when 'DOGM 710' then 40
+         when 'DOGM 720' then 50
+         when 'DOGM 730' then 60
+         when 'DOGM 740' then 70
+         when 'MORL 710' then 10
+         when 'MORL 720' then 20
+         when 'SPIR 710' then 10
+         when 'SPIR 720' then 20
+         when 'RSYN 710' then 10
+         when 'RSYN 720' then 20
+         else null
+       end as sequence_position,
        seed.learning_outcomes,
        seed.syllabus,
        'active',
@@ -417,6 +447,7 @@ insert into courses (
   department_or_domain,
   credits_or_weight,
   level,
+  sequence_position,
   learning_outcomes,
   syllabus,
   status,
@@ -431,6 +462,35 @@ select program.id,
        seed.department_or_domain,
        seed.credits,
        seed.level,
+       case seed.code
+         when 'PHIL 501' then 10
+         when 'PHIL 610' then 20
+         when 'PHIL 620' then 30
+         when 'PHIL 630' then 40
+         when 'THEO 510' then 10
+         when 'HIST 520' then 10
+         when 'PATR 610' then 20
+         when 'HIST 630' then 30
+         when 'HIST 640' then 40
+         when 'SCRP 530' then 10
+         when 'SCRP 630' then 20
+         when 'SCRP 640' then 30
+         when 'SCRP 650' then 40
+         when 'CONC 620' then 10
+         when 'ECCL 630' then 20
+         when 'LIT 640' then 30
+         when 'DOGM 710' then 40
+         when 'DOGM 720' then 50
+         when 'DOGM 730' then 60
+         when 'DOGM 740' then 70
+         when 'MORL 710' then 10
+         when 'MORL 720' then 20
+         when 'SPIR 710' then 10
+         when 'SPIR 720' then 20
+         when 'RSYN 710' then 10
+         when 'RSYN 720' then 20
+         else null
+       end as sequence_position,
        seed.learning_outcomes,
        seed.syllabus,
        'active',
@@ -615,6 +675,7 @@ insert into courses (
   department_or_domain,
   credits_or_weight,
   level,
+  sequence_position,
   learning_outcomes,
   syllabus,
   status,
@@ -629,6 +690,35 @@ select programs.id,
        seed.department_or_domain,
        seed.credits,
        seed.level,
+       case seed.code
+         when 'PHIL 501' then 10
+         when 'PHIL 610' then 20
+         when 'PHIL 620' then 30
+         when 'PHIL 630' then 40
+         when 'THEO 510' then 10
+         when 'HIST 520' then 10
+         when 'PATR 610' then 20
+         when 'HIST 630' then 30
+         when 'HIST 640' then 40
+         when 'SCRP 530' then 10
+         when 'SCRP 630' then 20
+         when 'SCRP 640' then 30
+         when 'SCRP 650' then 40
+         when 'CONC 620' then 10
+         when 'ECCL 630' then 20
+         when 'LIT 640' then 30
+         when 'DOGM 710' then 40
+         when 'DOGM 720' then 50
+         when 'DOGM 730' then 60
+         when 'DOGM 740' then 70
+         when 'MORL 710' then 10
+         when 'MORL 720' then 20
+         when 'SPIR 710' then 10
+         when 'SPIR 720' then 20
+         when 'RSYN 710' then 10
+         when 'RSYN 720' then 20
+         else null
+       end as sequence_position,
        seed.learning_outcomes,
        seed.syllabus,
        'active',
@@ -903,6 +993,7 @@ insert into courses (
   department_or_domain,
   credits_or_weight,
   level,
+  sequence_position,
   learning_outcomes,
   syllabus,
   status,
@@ -917,6 +1008,35 @@ select programs.id,
        seed.department_or_domain,
        seed.credits,
        seed.level,
+       case seed.code
+         when 'PHIL 501' then 10
+         when 'PHIL 610' then 20
+         when 'PHIL 620' then 30
+         when 'PHIL 630' then 40
+         when 'THEO 510' then 10
+         when 'HIST 520' then 10
+         when 'PATR 610' then 20
+         when 'HIST 630' then 30
+         when 'HIST 640' then 40
+         when 'SCRP 530' then 10
+         when 'SCRP 630' then 20
+         when 'SCRP 640' then 30
+         when 'SCRP 650' then 40
+         when 'CONC 620' then 10
+         when 'ECCL 630' then 20
+         when 'LIT 640' then 30
+         when 'DOGM 710' then 40
+         when 'DOGM 720' then 50
+         when 'DOGM 730' then 60
+         when 'DOGM 740' then 70
+         when 'MORL 710' then 10
+         when 'MORL 720' then 20
+         when 'SPIR 710' then 10
+         when 'SPIR 720' then 20
+         when 'RSYN 710' then 10
+         when 'RSYN 720' then 20
+         else null
+       end as sequence_position,
        seed.learning_outcomes,
        seed.syllabus,
        'active',
@@ -1187,6 +1307,7 @@ insert into courses (
   department_or_domain,
   credits_or_weight,
   level,
+  sequence_position,
   learning_outcomes,
   syllabus,
   status,
@@ -1201,6 +1322,35 @@ select programs.id,
        seed.department_or_domain,
        seed.credits,
        seed.level,
+       case seed.code
+         when 'PHIL 501' then 10
+         when 'PHIL 610' then 20
+         when 'PHIL 620' then 30
+         when 'PHIL 630' then 40
+         when 'THEO 510' then 10
+         when 'HIST 520' then 10
+         when 'PATR 610' then 20
+         when 'HIST 630' then 30
+         when 'HIST 640' then 40
+         when 'SCRP 530' then 10
+         when 'SCRP 630' then 20
+         when 'SCRP 640' then 30
+         when 'SCRP 650' then 40
+         when 'CONC 620' then 10
+         when 'ECCL 630' then 20
+         when 'LIT 640' then 30
+         when 'DOGM 710' then 40
+         when 'DOGM 720' then 50
+         when 'DOGM 730' then 60
+         when 'DOGM 740' then 70
+         when 'MORL 710' then 10
+         when 'MORL 720' then 20
+         when 'SPIR 710' then 10
+         when 'SPIR 720' then 20
+         when 'RSYN 710' then 10
+         when 'RSYN 720' then 20
+         else null
+       end as sequence_position,
        seed.learning_outcomes,
        seed.syllabus,
        'active',
@@ -1471,6 +1621,7 @@ insert into courses (
   department_or_domain,
   credits_or_weight,
   level,
+  sequence_position,
   learning_outcomes,
   syllabus,
   status,
@@ -1485,6 +1636,35 @@ select programs.id,
        seed.department_or_domain,
        seed.credits,
        seed.level,
+       case seed.code
+         when 'PHIL 501' then 10
+         when 'PHIL 610' then 20
+         when 'PHIL 620' then 30
+         when 'PHIL 630' then 40
+         when 'THEO 510' then 10
+         when 'HIST 520' then 10
+         when 'PATR 610' then 20
+         when 'HIST 630' then 30
+         when 'HIST 640' then 40
+         when 'SCRP 530' then 10
+         when 'SCRP 630' then 20
+         when 'SCRP 640' then 30
+         when 'SCRP 650' then 40
+         when 'CONC 620' then 10
+         when 'ECCL 630' then 20
+         when 'LIT 640' then 30
+         when 'DOGM 710' then 40
+         when 'DOGM 720' then 50
+         when 'DOGM 730' then 60
+         when 'DOGM 740' then 70
+         when 'MORL 710' then 10
+         when 'MORL 720' then 20
+         when 'SPIR 710' then 10
+         when 'SPIR 720' then 20
+         when 'RSYN 710' then 10
+         when 'RSYN 720' then 20
+         else null
+       end as sequence_position,
        seed.learning_outcomes,
        seed.syllabus,
        'active',
@@ -1737,7 +1917,7 @@ cross join (
       where a.module_id = seed.module_id and a.title = seed.title
     );
 
--- RSYN 720 - Research and Synthesis: Capstone Thesis and Defense
+-- RSYN 720 - Senior Thesis / Integrated Synthesis
 with actor as (
   select id as user_id
   from auth.users
@@ -1759,6 +1939,7 @@ insert into courses (
   department_or_domain,
   credits_or_weight,
   level,
+  sequence_position,
   learning_outcomes,
   syllabus,
   status,
@@ -1774,6 +1955,7 @@ select
   seed.department_or_domain,
   seed.credits,
   seed.level,
+  seed.sequence_position,
   seed.learning_outcomes,
   seed.syllabus,
   'active',
@@ -1785,21 +1967,22 @@ cross join (
   values
     (
       'RSYN 720',
-      'Research and Synthesis: Capstone Thesis and Defense',
-      'Culminating thesis that integrates philosophy, Scripture, doctrine, and history through sustained argument, objections, and revision.',
+      'Senior Thesis / Integrated Synthesis',
+      'Terminal synthesis integrating philosophy, Scripture, doctrine, and history through a governed thesis project and final synthesis reflection.',
       'Catholic Theology',
       3,
       'Advanced',
-      'Produce a thesis with a central claim and disciplined argument; integrate sources across philosophy, Scripture, doctrine, and history; present formal objections and replies; revise in response to critique; defend the thesis with a method memo.',
-      'Unit 1: Thesis question and prospectus revision.
-Unit 2: Source dossier and annotated map.
-Unit 3: Argument architecture and chapter drafts.
-Unit 4: Objections, replies, and revision.
-Unit 5: Final thesis and defense memo.
-Assessment: five staged deliverables culminating in a 7000-10000 word thesis and an 800-1200 word defense memo.',
+      'Define and delimit a governing research question; consolidate bibliography and method architecture; produce a formal prospectus, draft, and final thesis with objections and replies; deliver a final synthesis reflection integrating philosophy, Scripture, doctrine, and history.',
+      20,
+      'Unit 1: Thesis question and scope.
+Unit 2: Bibliography and method consolidation.
+Unit 3: Prospectus.
+Unit 4: Drafting and revision.
+Unit 5: Final thesis and synthesis reflection.
+Assessment: five staged milestones culminating in a 7000-10000 word thesis with an 800-1200 word synthesis reflection.',
       (select id from theo_domain)
     )
-) as seed(code, title, description, department_or_domain, credits, level, learning_outcomes, syllabus, domain_id)
+) as seed(code, title, description, department_or_domain, credits, level, sequence_position, learning_outcomes, syllabus, domain_id)
 where not exists (
   select 1 from courses c
   where c.program_id = programs.id and c.code = seed.code
@@ -1807,15 +1990,62 @@ where not exists (
 
 update courses
 set
-  description = 'Culminating thesis that integrates philosophy, Scripture, doctrine, and history through sustained argument, objections, and revision.',
-  learning_outcomes = 'Produce a thesis with a central claim and disciplined argument; integrate sources across philosophy, Scripture, doctrine, and history; present formal objections and replies; revise in response to critique; defend the thesis with a method memo.',
-  syllabus = 'Unit 1: Thesis question and prospectus revision.
-Unit 2: Source dossier and annotated map.
-Unit 3: Argument architecture and chapter drafts.
-Unit 4: Objections, replies, and revision.
-Unit 5: Final thesis and defense memo.
-Assessment: five staged deliverables culminating in a 7000-10000 word thesis and an 800-1200 word defense memo.'
+  title = 'Senior Thesis / Integrated Synthesis',
+  description = 'Terminal synthesis integrating philosophy, Scripture, doctrine, and history through a governed thesis project and final synthesis reflection.',
+  learning_outcomes = 'Define and delimit a governing research question; consolidate bibliography and method architecture; produce a formal prospectus, draft, and final thesis with objections and replies; deliver a final synthesis reflection integrating philosophy, Scripture, doctrine, and history.',
+  syllabus = 'Unit 1: Thesis question and scope.
+Unit 2: Bibliography and method consolidation.
+Unit 3: Prospectus.
+Unit 4: Drafting and revision.
+Unit 5: Final thesis and synthesis reflection.
+Assessment: five staged milestones culminating in a 7000-10000 word thesis with an 800-1200 word synthesis reflection.'
 where code = 'RSYN 720';
+
+-- Normalize legacy RSYN 720 modules
+update modules m
+set title = 'Thesis Question and Scope',
+    overview = 'Define the governing research question and scope.',
+    position = 0
+from courses c
+where c.id = m.course_id
+  and c.code = 'RSYN 720'
+  and m.title = 'Thesis Question and Prospectus Revision';
+
+update modules m
+set title = 'Bibliography and Method Consolidation',
+    overview = 'Consolidate bibliography and method architecture.',
+    position = 1
+from courses c
+where c.id = m.course_id
+  and c.code = 'RSYN 720'
+  and m.title = 'Source Dossier and Annotated Map';
+
+update modules m
+set title = 'Prospectus',
+    overview = 'Produce a formal thesis prospectus.',
+    position = 2
+from courses c
+where c.id = m.course_id
+  and c.code = 'RSYN 720'
+  and m.title = 'Argument Architecture and Chapter Drafts';
+
+update modules m
+set title = 'Drafting and Revision',
+    overview = 'Draft the thesis and revise for coherence.',
+    position = 3
+from courses c
+where c.id = m.course_id
+  and c.code = 'RSYN 720'
+  and m.title = 'Objections, Replies, and Revision';
+
+update modules m
+set title = 'Final Thesis and Synthesis Reflection',
+    overview = 'Submit the final thesis and synthesis reflection.',
+    position = 4
+from courses c
+where c.id = m.course_id
+  and c.code = 'RSYN 720'
+  and m.title = 'Final Thesis and Defense';
 
 with actor as (
   select id as user_id
@@ -1882,11 +2112,11 @@ select course.id, actor.user_id, seed.title, seed.overview, seed.position
 from course
 cross join actor
 cross join (values
-  ('Thesis Question and Prospectus Revision', 'Finalize thesis question and revise prospectus.', 0),
-  ('Source Dossier and Annotated Map', 'Assemble and annotate a disciplined source dossier.', 1),
-  ('Argument Architecture and Chapter Drafts', 'Build argument architecture and draft sections.', 2),
-  ('Objections, Replies, and Revision', 'Formalize objections and replies; revise for coherence.', 3),
-  ('Final Thesis and Defense', 'Complete thesis and defense memo.', 4)
+  ('Thesis Question and Scope', 'Define the governing research question and scope.', 0),
+  ('Bibliography and Method Consolidation', 'Consolidate bibliography and method architecture.', 1),
+  ('Prospectus', 'Produce a formal thesis prospectus.', 2),
+  ('Drafting and Revision', 'Draft the thesis and revise for coherence.', 3),
+  ('Final Thesis and Synthesis Reflection', 'Submit the final thesis and synthesis reflection.', 4)
 ) as seed(title, overview, position)
 where not exists (
   select 1 from modules m where m.course_id = course.id and m.title = seed.title
@@ -1910,6 +2140,57 @@ where r.module_id = rm.id
     'Full Thesis Draft'
   );
 
+-- Normalize legacy RSYN 720 assignments
+update assignments a
+set title = 'Thesis Question and Scope Statement',
+    instructions = 'Define the research question, governing problem, and scope boundaries (1200-1800 words).',
+    assignment_type = 'analysis'
+from modules m
+join courses c on c.id = m.course_id
+where a.module_id = m.id
+  and c.code = 'RSYN 720'
+  and a.title = 'Revision: Thesis Prospectus';
+
+update assignments a
+set title = 'Annotated Bibliography and Method Memo',
+    instructions = 'Deliver an annotated bibliography with a minimum of 6 primary and 4 secondary or magisterial sources plus a method architecture memo (1500-2200 words).',
+    assignment_type = 'analysis'
+from modules m
+join courses c on c.id = m.course_id
+where a.module_id = m.id
+  and c.code = 'RSYN 720'
+  and a.title = 'Analysis: Annotated Source Dossier';
+
+update assignments a
+set title = 'Thesis Prospectus',
+    instructions = 'Produce a formal prospectus with central claim, argument outline, source map, and chapter architecture (1800-2600 words).',
+    assignment_type = 'analysis'
+from modules m
+join courses c on c.id = m.course_id
+where a.module_id = m.id
+  and c.code = 'RSYN 720'
+  and a.title = 'Draft: Argument Architecture';
+
+update assignments a
+set title = 'Draft Thesis with Objections and Replies',
+    instructions = 'Submit a draft thesis with formal objections and replies and a revision plan (4500-6500 words).',
+    assignment_type = 'analysis'
+from modules m
+join courses c on c.id = m.course_id
+where a.module_id = m.id
+  and c.code = 'RSYN 720'
+  and a.title = 'Analysis: Objections and Replies';
+
+update assignments a
+set title = 'Final Thesis',
+    instructions = 'Submit the full thesis (7000-10000 words).',
+    assignment_type = 'essay'
+from modules m
+join courses c on c.id = m.course_id
+where a.module_id = m.id
+  and c.code = 'RSYN 720'
+  and a.title = 'Capstone Thesis and Defense Memo';
+
 -- Assignments for RSYN 720
 with actor as (
   select id as user_id
@@ -1922,7 +2203,7 @@ module_1 as (
   from modules m
   join courses c on c.id = m.course_id
   where c.code = 'RSYN 720'
-    and m.title = 'Thesis Question and Prospectus Revision'
+    and m.title = 'Thesis Question and Scope'
   limit 1
 ),
 module_2 as (
@@ -1930,7 +2211,7 @@ module_2 as (
   from modules m
   join courses c on c.id = m.course_id
   where c.code = 'RSYN 720'
-    and m.title = 'Source Dossier and Annotated Map'
+    and m.title = 'Bibliography and Method Consolidation'
   limit 1
 ),
 module_3 as (
@@ -1938,7 +2219,7 @@ module_3 as (
   from modules m
   join courses c on c.id = m.course_id
   where c.code = 'RSYN 720'
-    and m.title = 'Argument Architecture and Chapter Drafts'
+    and m.title = 'Prospectus'
   limit 1
 ),
 module_4 as (
@@ -1946,7 +2227,7 @@ module_4 as (
   from modules m
   join courses c on c.id = m.course_id
   where c.code = 'RSYN 720'
-    and m.title = 'Objections, Replies, and Revision'
+    and m.title = 'Drafting and Revision'
   limit 1
 ),
 module_5 as (
@@ -1954,7 +2235,7 @@ module_5 as (
   from modules m
   join courses c on c.id = m.course_id
   where c.code = 'RSYN 720'
-    and m.title = 'Final Thesis and Defense'
+    and m.title = 'Final Thesis and Synthesis Reflection'
   limit 1
 )
 insert into assignments (
@@ -1968,11 +2249,12 @@ select module_id, actor.user_id, title, instructions, assignment_type
 from actor
 cross join (
   values
-    ((select id from module_1), 'Revision: Thesis Prospectus', 'Revise the thesis prospectus into a finalized research question and central claim (1200-1800 words).', 'analysis'),
-    ((select id from module_2), 'Analysis: Annotated Source Dossier', 'Produce an annotated dossier with a minimum of 6 primary texts and 4 secondary or magisterial sources, ordered by authority (1500-2200 words).', 'analysis'),
-    ((select id from module_3), 'Draft: Argument Architecture', 'Submit a chapter outline and argument architecture with section summaries, source placement, and sequence rationale (1500-2200 words).', 'analysis'),
-    ((select id from module_4), 'Analysis: Objections and Replies', 'Submit a formal objections and replies memorandum with at least 4 major objections and disciplined replies grounded in primary texts (1500-2200 words).', 'analysis'),
-    ((select id from module_5), 'Capstone Thesis and Defense Memo', 'Submit the full thesis (7000-10000 words) with an 800-1200 word defense memo summarizing method, key objections, and revisions.', 'essay')
+    ((select id from module_1), 'Thesis Question and Scope Statement', 'Define the research question, governing problem, and scope boundaries (1200-1800 words).', 'analysis'),
+    ((select id from module_2), 'Annotated Bibliography and Method Memo', 'Deliver an annotated bibliography with a minimum of 6 primary and 4 secondary or magisterial sources plus a method architecture memo (1500-2200 words).', 'analysis'),
+    ((select id from module_3), 'Thesis Prospectus', 'Produce a formal prospectus with central claim, argument outline, source map, and chapter architecture (1800-2600 words).', 'analysis'),
+    ((select id from module_4), 'Draft Thesis with Objections and Replies', 'Submit a draft thesis with formal objections and replies and a revision plan (4500-6500 words).', 'analysis'),
+    ((select id from module_5), 'Final Thesis', 'Submit the full thesis (7000-10000 words).', 'essay'),
+    ((select id from module_5), 'Synthesis Reflection', 'Submit an 800-1200 word synthesis reflection on method, objections, and integration.', 'analysis')
 ) as seed(module_id, title, instructions, assignment_type)
 where module_id is not null
   and not exists (
@@ -1999,6 +2281,7 @@ insert into courses (
   department_or_domain,
   credits_or_weight,
   level,
+  sequence_position,
   learning_outcomes,
   syllabus,
   status,
@@ -2281,6 +2564,7 @@ insert into courses (
   department_or_domain,
   credits_or_weight,
   level,
+  sequence_position,
   learning_outcomes,
   syllabus,
   status,
@@ -2588,6 +2872,7 @@ insert into courses (
   department_or_domain,
   credits_or_weight,
   level,
+  sequence_position,
   learning_outcomes,
   syllabus,
   status,
@@ -2877,6 +3162,7 @@ insert into courses (
   department_or_domain,
   credits_or_weight,
   level,
+  sequence_position,
   learning_outcomes,
   syllabus,
   status,
@@ -2891,6 +3177,35 @@ select programs.id,
        seed.department_or_domain,
        seed.credits,
        seed.level,
+       case seed.code
+         when 'PHIL 501' then 10
+         when 'PHIL 610' then 20
+         when 'PHIL 620' then 30
+         when 'PHIL 630' then 40
+         when 'THEO 510' then 10
+         when 'HIST 520' then 10
+         when 'PATR 610' then 20
+         when 'HIST 630' then 30
+         when 'HIST 640' then 40
+         when 'SCRP 530' then 10
+         when 'SCRP 630' then 20
+         when 'SCRP 640' then 30
+         when 'SCRP 650' then 40
+         when 'CONC 620' then 10
+         when 'ECCL 630' then 20
+         when 'LIT 640' then 30
+         when 'DOGM 710' then 40
+         when 'DOGM 720' then 50
+         when 'DOGM 730' then 60
+         when 'DOGM 740' then 70
+         when 'MORL 710' then 10
+         when 'MORL 720' then 20
+         when 'SPIR 710' then 10
+         when 'SPIR 720' then 20
+         when 'RSYN 710' then 10
+         when 'RSYN 720' then 20
+         else null
+       end as sequence_position,
        seed.learning_outcomes,
        seed.syllabus,
        'active',
@@ -3183,6 +3498,7 @@ insert into courses (
   department_or_domain,
   credits_or_weight,
   level,
+  sequence_position,
   learning_outcomes,
   syllabus,
   status,
@@ -3197,6 +3513,35 @@ select programs.id,
        seed.department_or_domain,
        seed.credits,
        seed.level,
+       case seed.code
+         when 'PHIL 501' then 10
+         when 'PHIL 610' then 20
+         when 'PHIL 620' then 30
+         when 'PHIL 630' then 40
+         when 'THEO 510' then 10
+         when 'HIST 520' then 10
+         when 'PATR 610' then 20
+         when 'HIST 630' then 30
+         when 'HIST 640' then 40
+         when 'SCRP 530' then 10
+         when 'SCRP 630' then 20
+         when 'SCRP 640' then 30
+         when 'SCRP 650' then 40
+         when 'CONC 620' then 10
+         when 'ECCL 630' then 20
+         when 'LIT 640' then 30
+         when 'DOGM 710' then 40
+         when 'DOGM 720' then 50
+         when 'DOGM 730' then 60
+         when 'DOGM 740' then 70
+         when 'MORL 710' then 10
+         when 'MORL 720' then 20
+         when 'SPIR 710' then 10
+         when 'SPIR 720' then 20
+         when 'RSYN 710' then 10
+         when 'RSYN 720' then 20
+         else null
+       end as sequence_position,
        seed.learning_outcomes,
        seed.syllabus,
        'active',
@@ -3489,6 +3834,7 @@ insert into courses (
   department_or_domain,
   credits_or_weight,
   level,
+  sequence_position,
   learning_outcomes,
   syllabus,
   status,
@@ -3503,6 +3849,35 @@ select programs.id,
        seed.department_or_domain,
        seed.credits,
        seed.level,
+       case seed.code
+         when 'PHIL 501' then 10
+         when 'PHIL 610' then 20
+         when 'PHIL 620' then 30
+         when 'PHIL 630' then 40
+         when 'THEO 510' then 10
+         when 'HIST 520' then 10
+         when 'PATR 610' then 20
+         when 'HIST 630' then 30
+         when 'HIST 640' then 40
+         when 'SCRP 530' then 10
+         when 'SCRP 630' then 20
+         when 'SCRP 640' then 30
+         when 'SCRP 650' then 40
+         when 'CONC 620' then 10
+         when 'ECCL 630' then 20
+         when 'LIT 640' then 30
+         when 'DOGM 710' then 40
+         when 'DOGM 720' then 50
+         when 'DOGM 730' then 60
+         when 'DOGM 740' then 70
+         when 'MORL 710' then 10
+         when 'MORL 720' then 20
+         when 'SPIR 710' then 10
+         when 'SPIR 720' then 20
+         when 'RSYN 710' then 10
+         when 'RSYN 720' then 20
+         else null
+       end as sequence_position,
        seed.learning_outcomes,
        seed.syllabus,
        'active',
@@ -3773,6 +4148,7 @@ insert into courses (
   department_or_domain,
   credits_or_weight,
   level,
+  sequence_position,
   learning_outcomes,
   syllabus,
   status,
@@ -3787,6 +4163,35 @@ select programs.id,
        seed.department_or_domain,
        seed.credits,
        seed.level,
+       case seed.code
+         when 'PHIL 501' then 10
+         when 'PHIL 610' then 20
+         when 'PHIL 620' then 30
+         when 'PHIL 630' then 40
+         when 'THEO 510' then 10
+         when 'HIST 520' then 10
+         when 'PATR 610' then 20
+         when 'HIST 630' then 30
+         when 'HIST 640' then 40
+         when 'SCRP 530' then 10
+         when 'SCRP 630' then 20
+         when 'SCRP 640' then 30
+         when 'SCRP 650' then 40
+         when 'CONC 620' then 10
+         when 'ECCL 630' then 20
+         when 'LIT 640' then 30
+         when 'DOGM 710' then 40
+         when 'DOGM 720' then 50
+         when 'DOGM 730' then 60
+         when 'DOGM 740' then 70
+         when 'MORL 710' then 10
+         when 'MORL 720' then 20
+         when 'SPIR 710' then 10
+         when 'SPIR 720' then 20
+         when 'RSYN 710' then 10
+         when 'RSYN 720' then 20
+         else null
+       end as sequence_position,
        seed.learning_outcomes,
        seed.syllabus,
        'active',
@@ -4083,6 +4488,7 @@ insert into courses (
   department_or_domain,
   credits_or_weight,
   level,
+  sequence_position,
   learning_outcomes,
   syllabus,
   status,
@@ -4097,6 +4503,35 @@ select programs.id,
        seed.department_or_domain,
        seed.credits,
        seed.level,
+       case seed.code
+         when 'PHIL 501' then 10
+         when 'PHIL 610' then 20
+         when 'PHIL 620' then 30
+         when 'PHIL 630' then 40
+         when 'THEO 510' then 10
+         when 'HIST 520' then 10
+         when 'PATR 610' then 20
+         when 'HIST 630' then 30
+         when 'HIST 640' then 40
+         when 'SCRP 530' then 10
+         when 'SCRP 630' then 20
+         when 'SCRP 640' then 30
+         when 'SCRP 650' then 40
+         when 'CONC 620' then 10
+         when 'ECCL 630' then 20
+         when 'LIT 640' then 30
+         when 'DOGM 710' then 40
+         when 'DOGM 720' then 50
+         when 'DOGM 730' then 60
+         when 'DOGM 740' then 70
+         when 'MORL 710' then 10
+         when 'MORL 720' then 20
+         when 'SPIR 710' then 10
+         when 'SPIR 720' then 20
+         when 'RSYN 710' then 10
+         when 'RSYN 720' then 20
+         else null
+       end as sequence_position,
        seed.learning_outcomes,
        seed.syllabus,
        'active',
@@ -4367,6 +4802,7 @@ insert into courses (
   department_or_domain,
   credits_or_weight,
   level,
+  sequence_position,
   learning_outcomes,
   syllabus,
   status,
@@ -4381,6 +4817,35 @@ select programs.id,
        seed.department_or_domain,
        seed.credits,
        seed.level,
+       case seed.code
+         when 'PHIL 501' then 10
+         when 'PHIL 610' then 20
+         when 'PHIL 620' then 30
+         when 'PHIL 630' then 40
+         when 'THEO 510' then 10
+         when 'HIST 520' then 10
+         when 'PATR 610' then 20
+         when 'HIST 630' then 30
+         when 'HIST 640' then 40
+         when 'SCRP 530' then 10
+         when 'SCRP 630' then 20
+         when 'SCRP 640' then 30
+         when 'SCRP 650' then 40
+         when 'CONC 620' then 10
+         when 'ECCL 630' then 20
+         when 'LIT 640' then 30
+         when 'DOGM 710' then 40
+         when 'DOGM 720' then 50
+         when 'DOGM 730' then 60
+         when 'DOGM 740' then 70
+         when 'MORL 710' then 10
+         when 'MORL 720' then 20
+         when 'SPIR 710' then 10
+         when 'SPIR 720' then 20
+         when 'RSYN 710' then 10
+         when 'RSYN 720' then 20
+         else null
+       end as sequence_position,
        seed.learning_outcomes,
        seed.syllabus,
        'active',
@@ -4673,6 +5138,7 @@ insert into courses (
   department_or_domain,
   credits_or_weight,
   level,
+  sequence_position,
   learning_outcomes,
   syllabus,
   status,
@@ -4687,6 +5153,35 @@ select programs.id,
        seed.department_or_domain,
        seed.credits,
        seed.level,
+       case seed.code
+         when 'PHIL 501' then 10
+         when 'PHIL 610' then 20
+         when 'PHIL 620' then 30
+         when 'PHIL 630' then 40
+         when 'THEO 510' then 10
+         when 'HIST 520' then 10
+         when 'PATR 610' then 20
+         when 'HIST 630' then 30
+         when 'HIST 640' then 40
+         when 'SCRP 530' then 10
+         when 'SCRP 630' then 20
+         when 'SCRP 640' then 30
+         when 'SCRP 650' then 40
+         when 'CONC 620' then 10
+         when 'ECCL 630' then 20
+         when 'LIT 640' then 30
+         when 'DOGM 710' then 40
+         when 'DOGM 720' then 50
+         when 'DOGM 730' then 60
+         when 'DOGM 740' then 70
+         when 'MORL 710' then 10
+         when 'MORL 720' then 20
+         when 'SPIR 710' then 10
+         when 'SPIR 720' then 20
+         when 'RSYN 710' then 10
+         when 'RSYN 720' then 20
+         else null
+       end as sequence_position,
        seed.learning_outcomes,
        seed.syllabus,
        'active',
@@ -4979,6 +5474,7 @@ insert into courses (
   department_or_domain,
   credits_or_weight,
   level,
+  sequence_position,
   learning_outcomes,
   syllabus,
   status,
@@ -4993,6 +5489,35 @@ select programs.id,
        seed.department_or_domain,
        seed.credits,
        seed.level,
+       case seed.code
+         when 'PHIL 501' then 10
+         when 'PHIL 610' then 20
+         when 'PHIL 620' then 30
+         when 'PHIL 630' then 40
+         when 'THEO 510' then 10
+         when 'HIST 520' then 10
+         when 'PATR 610' then 20
+         when 'HIST 630' then 30
+         when 'HIST 640' then 40
+         when 'SCRP 530' then 10
+         when 'SCRP 630' then 20
+         when 'SCRP 640' then 30
+         when 'SCRP 650' then 40
+         when 'CONC 620' then 10
+         when 'ECCL 630' then 20
+         when 'LIT 640' then 30
+         when 'DOGM 710' then 40
+         when 'DOGM 720' then 50
+         when 'DOGM 730' then 60
+         when 'DOGM 740' then 70
+         when 'MORL 710' then 10
+         when 'MORL 720' then 20
+         when 'SPIR 710' then 10
+         when 'SPIR 720' then 20
+         when 'RSYN 710' then 10
+         when 'RSYN 720' then 20
+         else null
+       end as sequence_position,
        seed.learning_outcomes,
        seed.syllabus,
        'active',
@@ -5285,6 +5810,7 @@ insert into courses (
   department_or_domain,
   credits_or_weight,
   level,
+  sequence_position,
   learning_outcomes,
   syllabus,
   status,
@@ -5299,6 +5825,35 @@ select programs.id,
        seed.department_or_domain,
        seed.credits,
        seed.level,
+       case seed.code
+         when 'PHIL 501' then 10
+         when 'PHIL 610' then 20
+         when 'PHIL 620' then 30
+         when 'PHIL 630' then 40
+         when 'THEO 510' then 10
+         when 'HIST 520' then 10
+         when 'PATR 610' then 20
+         when 'HIST 630' then 30
+         when 'HIST 640' then 40
+         when 'SCRP 530' then 10
+         when 'SCRP 630' then 20
+         when 'SCRP 640' then 30
+         when 'SCRP 650' then 40
+         when 'CONC 620' then 10
+         when 'ECCL 630' then 20
+         when 'LIT 640' then 30
+         when 'DOGM 710' then 40
+         when 'DOGM 720' then 50
+         when 'DOGM 730' then 60
+         when 'DOGM 740' then 70
+         when 'MORL 710' then 10
+         when 'MORL 720' then 20
+         when 'SPIR 710' then 10
+         when 'SPIR 720' then 20
+         when 'RSYN 710' then 10
+         when 'RSYN 720' then 20
+         else null
+       end as sequence_position,
        seed.learning_outcomes,
        seed.syllabus,
        'active',
@@ -5589,6 +6144,7 @@ insert into courses (
   department_or_domain,
   credits_or_weight,
   level,
+  sequence_position,
   learning_outcomes,
   syllabus,
   status,
@@ -7120,6 +7676,48 @@ where module_id is not null
     select 1 from assignments a
     where a.module_id = seed.module_id and a.title = seed.title
   );
+
+-- Explicit curricular sequence ordering (used for recommendation priority)
+update courses
+set sequence_position = case code
+  when 'PHIL 501' then 10
+  when 'PHIL 610' then 20
+  when 'PHIL 620' then 30
+  when 'PHIL 630' then 40
+  when 'THEO 510' then 10
+  when 'HIST 520' then 10
+  when 'PATR 610' then 20
+  when 'HIST 630' then 30
+  when 'HIST 640' then 40
+  when 'SCRP 530' then 10
+  when 'SCRP 630' then 20
+  when 'SCRP 640' then 30
+  when 'SCRP 650' then 40
+  when 'CONC 620' then 10
+  when 'ECCL 630' then 20
+  when 'LIT 640' then 30
+  when 'DOGM 710' then 40
+  when 'DOGM 720' then 50
+  when 'DOGM 730' then 60
+  when 'DOGM 740' then 70
+  when 'MORL 710' then 10
+  when 'MORL 720' then 20
+  when 'SPIR 710' then 10
+  when 'SPIR 720' then 20
+  when 'RSYN 710' then 10
+  when 'RSYN 720' then 20
+  else sequence_position
+end
+where code in (
+  'PHIL 501', 'PHIL 610', 'PHIL 620', 'PHIL 630',
+  'THEO 510',
+  'HIST 520', 'PATR 610', 'HIST 630', 'HIST 640',
+  'SCRP 530', 'SCRP 630', 'SCRP 640', 'SCRP 650',
+  'CONC 620', 'ECCL 630', 'LIT 640', 'DOGM 710', 'DOGM 720', 'DOGM 730', 'DOGM 740',
+  'MORL 710', 'MORL 720',
+  'SPIR 710', 'SPIR 720',
+  'RSYN 710', 'RSYN 720'
+);
 
 commit;
 

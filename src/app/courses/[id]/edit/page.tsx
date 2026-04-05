@@ -28,7 +28,7 @@ export default async function EditCoursePage({
   const { data: course } = await supabase
     .from("courses")
     .select(
-      "id, title, description, code, department_or_domain, credits_or_weight, level, learning_outcomes, syllabus, status, program:programs(id, title), domain_id"
+      "id, title, description, code, department_or_domain, credits_or_weight, level, sequence_position, learning_outcomes, syllabus, status, program:programs(id, title), domain_id"
     )
     .eq("id", id)
     .single();
@@ -46,6 +46,21 @@ export default async function EditCoursePage({
     .from("courses")
     .select("id, title, code")
     .order("title");
+
+  const { data: requirementBlocks } = await supabase
+    .from("requirement_blocks")
+    .select("id, title, description, category, program:program_id(id, title), position")
+    .eq("program_id", course.program?.id ?? "")
+    .order("position", { ascending: true });
+
+  const { data: requirementMappings } = await supabase
+    .from("course_requirement_blocks")
+    .select("requirement_block_id")
+    .eq("course_id", course.id);
+
+  const selectedBlocks = new Set(
+    (requirementMappings ?? []).map((mapping) => mapping.requirement_block_id)
+  );
 
   const { data: prerequisites } = await supabase
     .from("course_prerequisites")
@@ -170,6 +185,23 @@ export default async function EditCoursePage({
             </div>
             <div className="space-y-2">
               <label className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                Sequence Position
+              </label>
+              <input
+                name="sequencePosition"
+                type="number"
+                min="0"
+                step="1"
+                required
+                defaultValue={course.sequence_position ?? ""}
+                className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+              />
+              <p className="text-xs text-[var(--muted)]">
+                Lower numbers come earlier in the curriculum.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                 Status
               </label>
               <select
@@ -249,6 +281,38 @@ export default async function EditCoursePage({
               </div>
             ) : (
               <p className="text-sm text-[var(--muted)]">No other courses yet.</p>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+              Requirement Block Placement (Required)
+            </p>
+            {requirementBlocks?.length ? (
+              <div className="grid gap-2 md:grid-cols-2">
+                {requirementBlocks.map((block) => (
+                  <label
+                    key={block.id}
+                    className="flex items-start gap-3 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      name="requirementBlockIds"
+                      value={block.id}
+                      defaultChecked={selectedBlocks.has(block.id)}
+                      className="mt-1 h-4 w-4"
+                    />
+                    <span>
+                      {block.title}
+                      {block.category ? ` · ${block.category}` : ""}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-[var(--muted)]">
+                No requirement blocks exist for this program yet.
+              </p>
             )}
           </div>
 

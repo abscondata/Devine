@@ -57,58 +57,228 @@ export interface Database {
         };
         Relationships: [];
       };
-      courses: {
+      review_links: {
+        Row: {
+          id: string;
+          token_hash: string;
+          program_id: string;
+          created_at: string;
+          expires_at: string | null;
+          revoked_at: string | null;
+          last_accessed_at: string | null;
+          note: string | null;
+        };
+        Insert: {
+          id?: string;
+          token_hash: string;
+          program_id: string;
+          created_at?: string;
+          expires_at?: string | null;
+          revoked_at?: string | null;
+          last_accessed_at?: string | null;
+          note?: string | null;
+        };
+        Update: {
+          id?: string;
+          token_hash?: string;
+          program_id?: string;
+          created_at?: string;
+          expires_at?: string | null;
+          revoked_at?: string | null;
+          last_accessed_at?: string | null;
+          note?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "review_links_program_id_fkey";
+            columns: ["program_id"];
+            isOneToOne: false;
+            referencedRelation: "programs";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      thesis_projects: {
         Row: {
           id: string;
           program_id: string;
+          course_id: string;
           created_by: string;
           title: string;
-          description: string | null;
-          code: string | null;
-          department_or_domain: string | null;
-          credits_or_weight: number | null;
-          level: string | null;
-          learning_outcomes: string | null;
-          syllabus: string | null;
+          research_question: string;
+          governing_problem: string;
+          thesis_claim: string | null;
+          scope_statement: string;
           status: string;
-          domain_id: string | null;
-          is_active: boolean;
+          opened_at: string | null;
+          candidacy_established_at: string | null;
+          prospectus_locked_at: string | null;
+          final_submitted_at: string | null;
           created_at: string;
+          updated_at: string;
         };
         Insert: {
           id?: string;
           program_id: string;
+          course_id: string;
           created_by?: string;
           title: string;
-          description?: string | null;
-          code?: string | null;
-          department_or_domain?: string | null;
-          credits_or_weight?: number | null;
-          level?: string | null;
-          learning_outcomes?: string | null;
-          syllabus?: string | null;
+          research_question: string;
+          governing_problem: string;
+          thesis_claim?: string | null;
+          scope_statement: string;
           status?: string;
-          domain_id?: string | null;
-          is_active?: boolean;
+          opened_at?: string | null;
+          candidacy_established_at?: string | null;
+          prospectus_locked_at?: string | null;
+          final_submitted_at?: string | null;
           created_at?: string;
+          updated_at?: string;
         };
         Update: {
           id?: string;
           program_id?: string;
+          course_id?: string;
           created_by?: string;
           title?: string;
-          description?: string | null;
-          code?: string | null;
-          department_or_domain?: string | null;
-          credits_or_weight?: number | null;
-          level?: string | null;
-          learning_outcomes?: string | null;
-          syllabus?: string | null;
+          research_question?: string;
+          governing_problem?: string;
+          thesis_claim?: string | null;
+          scope_statement?: string;
           status?: string;
-          domain_id?: string | null;
-          is_active?: boolean;
+          opened_at?: string | null;
+          candidacy_established_at?: string | null;
+          prospectus_locked_at?: string | null;
+          final_submitted_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "thesis_projects_program_id_fkey";
+            columns: ["program_id"];
+            isOneToOne: false;
+            referencedRelation: "programs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "thesis_projects_course_id_fkey";
+            columns: ["course_id"];
+            isOneToOne: false;
+            referencedRelation: "courses";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      thesis_milestones: {
+        Row: {
+          id: string;
+          thesis_project_id: string;
+          created_by: string;
+          milestone_key: string;
+          title: string;
+          position: number;
+          required: boolean;
+          completed_at: string | null;
+          submission_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          thesis_project_id: string;
+          created_by?: string;
+          milestone_key: string;
+          title: string;
+          position?: number;
+          required?: boolean;
+          completed_at?: string | null;
+          submission_id?: string | null;
           created_at?: string;
         };
+        Update: {
+          id?: string;
+          thesis_project_id?: string;
+          created_by?: string;
+          milestone_key?: string;
+          title?: string;
+          position?: number;
+          required?: boolean;
+          completed_at?: string | null;
+          submission_id?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "thesis_milestones_thesis_project_id_fkey";
+            columns: ["thesis_project_id"];
+            isOneToOne: false;
+            referencedRelation: "thesis_projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "thesis_milestones_submission_id_fkey";
+            columns: ["submission_id"];
+            isOneToOne: false;
+            referencedRelation: "submissions";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+        courses: {
+          Row: {
+            id: string;
+            program_id: string;
+            created_by: string;
+            title: string;
+            description: string | null;
+            code: string | null;
+            department_or_domain: string | null;
+            credits_or_weight: number | null;
+            level: string | null;
+            sequence_position: number | null;
+            learning_outcomes: string | null;
+            syllabus: string | null;
+            status: string;
+            domain_id: string | null;
+            is_active: boolean;
+            created_at: string;
+          };
+          Insert: {
+            id?: string;
+            program_id: string;
+            created_by?: string;
+            title: string;
+            description?: string | null;
+            code?: string | null;
+            department_or_domain?: string | null;
+            credits_or_weight?: number | null;
+            level?: string | null;
+            sequence_position?: number | null;
+            learning_outcomes?: string | null;
+            syllabus?: string | null;
+            status?: string;
+            domain_id?: string | null;
+            is_active?: boolean;
+            created_at?: string;
+          };
+          Update: {
+            id?: string;
+            program_id?: string;
+            created_by?: string;
+            title?: string;
+            description?: string | null;
+            code?: string | null;
+            department_or_domain?: string | null;
+            credits_or_weight?: number | null;
+            level?: string | null;
+            sequence_position?: number | null;
+            learning_outcomes?: string | null;
+            syllabus?: string | null;
+            status?: string;
+            domain_id?: string | null;
+            is_active?: boolean;
+            created_at?: string;
+          };
         Relationships: [{ foreignKeyName: "courses_program_id_fkey"; columns: ["program_id"]; isOneToOne: false; referencedRelation: "programs"; referencedColumns: ["id"] }, { foreignKeyName: "courses_domain_id_fkey"; columns: ["domain_id"]; isOneToOne: false; referencedRelation: "domains"; referencedColumns: ["id"] }];
       };
       domains: {
@@ -663,7 +833,58 @@ export interface Database {
       };
     };
     Views: {};
-    Functions: {};
+    Functions: {
+      create_course_with_blocks: {
+        Args: {
+          p_program_id: string;
+          p_title: string;
+          p_description: string | null;
+          p_code: string | null;
+          p_department_or_domain: string | null;
+          p_credits_or_weight: number | null;
+          p_level: string | null;
+          p_sequence_position: number | null;
+          p_learning_outcomes: string | null;
+          p_syllabus: string | null;
+          p_status: string | null;
+          p_domain_id: string | null;
+          p_is_active: boolean;
+          p_requirement_block_ids: string[];
+        };
+        Returns: string;
+      };
+      update_course_with_blocks: {
+        Args: {
+          p_course_id: string;
+          p_title: string;
+          p_description: string | null;
+          p_code: string | null;
+          p_department_or_domain: string | null;
+          p_credits_or_weight: number | null;
+          p_level: string | null;
+          p_sequence_position: number | null;
+          p_learning_outcomes: string | null;
+          p_syllabus: string | null;
+          p_status: string | null;
+          p_domain_id: string | null;
+          p_is_active: boolean;
+          p_requirement_block_ids: string[];
+        };
+        Returns: void;
+      };
+      create_thesis_project_with_milestones: {
+        Args: {
+          p_program_id: string;
+          p_course_id: string;
+          p_title: string;
+          p_research_question: string;
+          p_governing_problem: string;
+          p_thesis_claim: string | null;
+          p_scope_statement: string;
+        };
+        Returns: string;
+      };
+    };
     Enums: {
       task_status: "NEW" | "WAITING_ON_MISSING_DATA" | "READY_FOR_REVIEW" | "EXCEPTION" | "APPROVED" | "SENT" | "FAILED" | "CLOSED";
     };

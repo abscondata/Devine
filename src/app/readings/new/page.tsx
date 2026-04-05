@@ -2,14 +2,10 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createReading } from "@/lib/actions";
+import { READING_STATUS_ALLOWED } from "@/lib/academic-standing";
 import { ProtectedShell } from "@/components/protected-shell";
 
-const readingStatuses = [
-  "not_started",
-  "in_progress",
-  "complete",
-  "skipped",
-];
+const readingStatuses = READING_STATUS_ALLOWED;
 
 export default async function NewReadingPage({
   searchParams,
@@ -33,6 +29,16 @@ export default async function NewReadingPage({
     .order("title");
 
   const defaultModuleId = moduleId ?? (modules?.length ? modules[0].id : "");
+  const { data: latestReading } = defaultModuleId
+    ? await supabase
+        .from("readings")
+        .select("position")
+        .eq("module_id", defaultModuleId)
+        .order("position", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    : { data: null };
+  const defaultPosition = (latestReading?.position ?? -1) + 1;
 
   return (
     <ProtectedShell userEmail={user.email ?? null}>
@@ -197,6 +203,24 @@ export default async function NewReadingPage({
                 rows={4}
                 className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
               />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                Reading Position
+              </label>
+              <input
+                name="position"
+                type="number"
+                min={0}
+                required
+                defaultValue={defaultPosition}
+                className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+              />
+              <p className="text-xs text-[var(--muted)]">
+                Lower numbers appear earlier in the module. Update this if you change the
+                module selection.
+              </p>
             </div>
 
             <div className="flex items-center gap-3">

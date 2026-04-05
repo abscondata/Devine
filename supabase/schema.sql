@@ -28,6 +28,21 @@ create table if not exists program_members (
   primary key (program_id, user_id)
 );
 
+-- Review links (external, read-only access)
+create table if not exists review_links (
+  id uuid primary key default gen_random_uuid(),
+  token_hash text not null unique,
+  program_id uuid not null references programs(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz,
+  revoked_at timestamptz,
+  last_accessed_at timestamptz,
+  note text
+);
+
+create index if not exists idx_review_links_program_id on review_links(program_id);
+create index if not exists idx_review_links_expires_at on review_links(expires_at);
+
 alter table program_members drop constraint if exists program_members_role_check;
 alter table program_members
   add constraint program_members_role_check
@@ -67,21 +82,23 @@ create table if not exists courses (
   created_by uuid not null references auth.users(id) default auth.uid(),
   title text not null,
   description text,
-  code text,
-  department_or_domain text,
-  credits_or_weight numeric,
-  level text,
-  learning_outcomes text,
-  syllabus text,
-  status text not null default 'active',
+    code text,
+    department_or_domain text,
+    credits_or_weight numeric,
+    level text,
+    sequence_position integer,
+    learning_outcomes text,
+    syllabus text,
+    status text not null default 'active',
   domain_id uuid references domains(id) on delete set null,
   is_active boolean not null default true,
   created_at timestamptz not null default now()
 );
 
-alter table courses add column if not exists created_by uuid references auth.users(id);
-alter table courses add column if not exists code text;
-alter table courses add column if not exists department_or_domain text;
+  alter table courses add column if not exists created_by uuid references auth.users(id);
+  alter table courses add column if not exists code text;
+  alter table courses add column if not exists department_or_domain text;
+  alter table courses add column if not exists sequence_position integer;
 alter table courses add column if not exists credits_or_weight numeric;
 alter table courses add column if not exists level text;
 alter table courses add column if not exists learning_outcomes text;
@@ -89,7 +106,13 @@ alter table courses add column if not exists syllabus text;
 alter table courses add column if not exists status text;
 alter table courses add column if not exists domain_id uuid references domains(id);
 alter table courses alter column created_by set default auth.uid();
-alter table courses alter column created_by set not null;
+  alter table courses alter column created_by set not null;
+  alter table courses alter column sequence_position set not null;
+
+  alter table courses drop constraint if exists courses_sequence_position_check;
+  alter table courses
+    add constraint courses_sequence_position_check
+      check (sequence_position is null or sequence_position >= 0);
 alter table courses alter column status set default 'active';
 alter table courses alter column status set not null;
 
@@ -375,6 +398,231 @@ alter table critiques
   references submissions(id, version)
   on delete cascade;
 
+-- Thesis projects
+create table if not exists thesis_projects (
+  id uuid primary key default gen_random_uuid(),
+  program_id uuid not null references programs(id) on delete cascade,
+  course_id uuid not null references courses(id) on delete cascade,
+  created_by uuid not null references auth.users(id) default auth.uid(),
+  title text not null,
+  research_question text not null,
+  governing_problem text not null,
+  thesis_claim text,
+  scope_statement text not null,
+  status text not null default 'not_started',
+  opened_at timestamptz,
+  candidacy_established_at timestamptz,
+  prospectus_locked_at timestamptz,
+  final_submitted_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table thesis_projects add column if not exists created_by uuid references auth.users(id);
+alter table thesis_projects add column if not exists thesis_claim text;
+alter table thesis_projects add column if not exists status text;
+alter table thesis_projects add column if not exists opened_at timestamptz;
+alter table thesis_projects add column if not exists candidacy_established_at timestamptz;
+alter table thesis_projects add column if not exists prospectus_locked_at timestamptz;
+alter table thesis_projects add column if not exists final_submitted_at timestamptz;
+alter table thesis_projects add column if not exists created_at timestamptz;
+alter table thesis_projects add column if not exists updated_at timestamptz;
+alter table thesis_projects alter column created_by set default auth.uid();
+alter table thesis_projects alter column created_by set not null;
+alter table thesis_projects alter column status set default 'not_started';
+alter table thesis_projects alter column status set not null;
+alter table thesis_projects alter column created_at set default now();
+alter table thesis_projects alter column created_at set not null;
+alter table thesis_projects alter column updated_at set default now();
+alter table thesis_projects alter column updated_at set not null;
+
+alter table thesis_projects drop constraint if exists thesis_projects_status_check;
+alter table thesis_projects
+  add constraint thesis_projects_status_check
+  check (
+    status in (
+      'not_started',
+      'question_defined',
+      'scope_defined',
+      'bibliography_in_progress',
+      'candidacy_established',
+      'prospectus_complete',
+      'draft_submitted',
+      'final_submitted',
+      'complete'
+    )
+  );
+
+create unique index if not exists idx_thesis_projects_program_course
+  on thesis_projects(program_id, course_id);
+create index if not exists idx_thesis_projects_program_id on thesis_projects(program_id);
+create index if not exists idx_thesis_projects_course_id on thesis_projects(course_id);
+
+-- Thesis milestones
+create table if not exists thesis_milestones (
+  id uuid primary key default gen_random_uuid(),
+  thesis_project_id uuid not null references thesis_projects(id) on delete cascade,
+  created_by uuid not null references auth.users(id) default auth.uid(),
+  milestone_key text not null,
+  title text not null,
+  position integer not null default 0,
+  required boolean not null default true,
+  completed_at timestamptz,
+  submission_id uuid references submissions(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+alter table thesis_milestones add column if not exists created_by uuid references auth.users(id);
+alter table thesis_milestones add column if not exists milestone_key text;
+alter table thesis_milestones add column if not exists position integer;
+alter table thesis_milestones add column if not exists required boolean;
+alter table thesis_milestones add column if not exists completed_at timestamptz;
+alter table thesis_milestones add column if not exists submission_id uuid references submissions(id);
+alter table thesis_milestones add column if not exists created_at timestamptz;
+alter table thesis_milestones alter column created_by set default auth.uid();
+alter table thesis_milestones alter column created_by set not null;
+alter table thesis_milestones alter column position set default 0;
+alter table thesis_milestones alter column position set not null;
+alter table thesis_milestones alter column required set default true;
+alter table thesis_milestones alter column required set not null;
+alter table thesis_milestones alter column created_at set default now();
+alter table thesis_milestones alter column created_at set not null;
+
+alter table thesis_milestones drop constraint if exists thesis_milestones_position_check;
+alter table thesis_milestones
+  add constraint thesis_milestones_position_check
+  check (position >= 0);
+
+alter table thesis_milestones drop constraint if exists thesis_milestones_key_check;
+alter table thesis_milestones
+  add constraint thesis_milestones_key_check
+  check (
+    milestone_key in (
+      'question_problem',
+      'scope_boundaries',
+      'preliminary_bibliography',
+      'method_architecture_memo',
+      'prospectus',
+      'draft_thesis',
+      'final_thesis',
+      'final_synthesis_reflection'
+    )
+  );
+
+create unique index if not exists idx_thesis_milestones_project_key
+  on thesis_milestones(thesis_project_id, milestone_key);
+create unique index if not exists idx_thesis_milestones_project_position
+  on thesis_milestones(thesis_project_id, position);
+create index if not exists idx_thesis_milestones_project_id
+  on thesis_milestones(thesis_project_id);
+create index if not exists idx_thesis_milestones_submission_id
+  on thesis_milestones(submission_id);
+
+-- Thesis project guardrail: only RSYN 720 and matching program/course
+create or replace function private.enforce_thesis_course()
+returns trigger
+language plpgsql
+as $$
+declare
+  v_course_code text;
+  v_program_id uuid;
+begin
+  select code, program_id into v_course_code, v_program_id
+  from courses
+  where id = new.course_id;
+
+  if v_course_code is null then
+    raise exception 'Course not found for thesis project.';
+  end if;
+
+  if v_course_code <> 'RSYN 720' then
+    raise exception 'Thesis projects are restricted to RSYN 720.';
+  end if;
+
+  if v_program_id <> new.program_id then
+    raise exception 'Thesis project program/course mismatch.';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists thesis_projects_course_guard on thesis_projects;
+create trigger thesis_projects_course_guard
+before insert or update on thesis_projects
+for each row execute function private.enforce_thesis_course();
+
+-- Thesis project creation + canonical milestones
+create or replace function create_thesis_project_with_milestones(
+  p_program_id uuid,
+  p_course_id uuid,
+  p_title text,
+  p_research_question text,
+  p_governing_problem text,
+  p_thesis_claim text,
+  p_scope_statement text
+)
+returns uuid
+language plpgsql
+as $$
+declare
+  v_project_id uuid;
+begin
+  if not exists (
+    select 1 from courses c
+    where c.id = p_course_id
+      and c.code = 'RSYN 720'
+      and c.program_id = p_program_id
+  ) then
+    raise exception 'Thesis projects are only allowed for RSYN 720 in this program.';
+  end if;
+
+  insert into thesis_projects (
+    program_id,
+    course_id,
+    created_by,
+    title,
+    research_question,
+    governing_problem,
+    thesis_claim,
+    scope_statement,
+    opened_at
+  )
+  values (
+    p_program_id,
+    p_course_id,
+    auth.uid(),
+    p_title,
+    p_research_question,
+    p_governing_problem,
+    nullif(p_thesis_claim, ''),
+    p_scope_statement,
+    now()
+  )
+  returning id into v_project_id;
+
+  insert into thesis_milestones (
+    thesis_project_id,
+    created_by,
+    milestone_key,
+    title,
+    position,
+    required
+  )
+  values
+    (v_project_id, auth.uid(), 'question_problem', 'Question and Problem Statement', 0, true),
+    (v_project_id, auth.uid(), 'scope_boundaries', 'Scope and Boundaries', 1, true),
+    (v_project_id, auth.uid(), 'preliminary_bibliography', 'Preliminary Bibliography', 2, true),
+    (v_project_id, auth.uid(), 'method_architecture_memo', 'Method / Architecture Memo', 3, true),
+    (v_project_id, auth.uid(), 'prospectus', 'Prospectus', 4, true),
+    (v_project_id, auth.uid(), 'draft_thesis', 'Draft Thesis', 5, true),
+    (v_project_id, auth.uid(), 'final_thesis', 'Final Thesis', 6, true),
+    (v_project_id, auth.uid(), 'final_synthesis_reflection', 'Final Synthesis Reflection', 7, true);
+
+  return v_project_id;
+end;
+$$;
+
 -- Submission evaluations (RSYN 720 enforcement)
 create table if not exists submission_evaluations (
   id uuid primary key default gen_random_uuid(),
@@ -511,6 +759,212 @@ begin
   end if;
 
   return new;
+end;
+$$ language plpgsql;
+
+create or replace function prevent_module_parent_change()
+returns trigger as $$
+begin
+  if new.course_id <> old.course_id then
+    raise exception 'Module course_id cannot be changed.';
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+create or replace function prevent_reading_parent_change()
+returns trigger as $$
+begin
+  if new.module_id <> old.module_id then
+    raise exception 'Reading module_id cannot be changed.';
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+create or replace function prevent_assignment_parent_change()
+returns trigger as $$
+begin
+  if new.module_id <> old.module_id then
+    raise exception 'Assignment module_id cannot be changed.';
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+create or replace function ensure_course_has_requirement_block()
+returns trigger as $$
+declare
+  block_count integer;
+begin
+  select count(*)
+    into block_count
+  from course_requirement_blocks
+  where course_id = new.id;
+
+  if block_count = 0 then
+    raise exception 'Course must belong to at least one requirement block.';
+  end if;
+
+  return new;
+end;
+$$ language plpgsql;
+
+create or replace function ensure_course_requirement_blocks_present()
+returns trigger as $$
+declare
+  block_count integer;
+begin
+  if not exists (select 1 from courses where id = old.course_id) then
+    return old;
+  end if;
+
+  select count(*)
+    into block_count
+  from course_requirement_blocks
+  where course_id = old.course_id;
+
+  if block_count = 0 then
+    raise exception 'Course must remain mapped to at least one requirement block.';
+  end if;
+
+  return old;
+end;
+$$ language plpgsql;
+
+create or replace function create_course_with_blocks(
+  p_program_id uuid,
+  p_title text,
+  p_description text,
+  p_code text,
+  p_department_or_domain text,
+  p_credits_or_weight numeric,
+  p_level text,
+  p_sequence_position integer,
+  p_learning_outcomes text,
+  p_syllabus text,
+  p_status text,
+  p_domain_id uuid,
+  p_is_active boolean,
+  p_requirement_block_ids uuid[]
+)
+returns uuid as $$
+declare
+  new_course_id uuid;
+  cleaned_blocks uuid[];
+begin
+  cleaned_blocks := array(select distinct unnest(p_requirement_block_ids));
+  if cleaned_blocks is null or array_length(cleaned_blocks, 1) is null then
+    raise exception 'Course must be placed in at least one requirement block.';
+  end if;
+
+  insert into courses (
+    program_id,
+    created_by,
+    title,
+    description,
+    code,
+    department_or_domain,
+    credits_or_weight,
+    level,
+    sequence_position,
+    learning_outcomes,
+    syllabus,
+    status,
+    domain_id,
+    is_active
+  )
+  values (
+    p_program_id,
+    auth.uid(),
+    p_title,
+    p_description,
+    p_code,
+    p_department_or_domain,
+    p_credits_or_weight,
+    p_level,
+    p_sequence_position,
+    p_learning_outcomes,
+    p_syllabus,
+    p_status,
+    p_domain_id,
+    p_is_active
+  )
+  returning id into new_course_id;
+
+  insert into course_requirement_blocks (
+    course_id,
+    requirement_block_id,
+    created_by
+  )
+  select new_course_id, block_id, auth.uid()
+  from unnest(cleaned_blocks) as block_id;
+
+  return new_course_id;
+end;
+$$ language plpgsql;
+
+create or replace function update_course_with_blocks(
+  p_course_id uuid,
+  p_title text,
+  p_description text,
+  p_code text,
+  p_department_or_domain text,
+  p_credits_or_weight numeric,
+  p_level text,
+  p_sequence_position integer,
+  p_learning_outcomes text,
+  p_syllabus text,
+  p_status text,
+  p_domain_id uuid,
+  p_is_active boolean,
+  p_requirement_block_ids uuid[]
+)
+returns void as $$
+declare
+  cleaned_blocks uuid[];
+begin
+  cleaned_blocks := array(select distinct unnest(p_requirement_block_ids));
+  if cleaned_blocks is null or array_length(cleaned_blocks, 1) is null then
+    raise exception 'Course must be placed in at least one requirement block.';
+  end if;
+
+  update courses
+  set title = p_title,
+      description = p_description,
+      code = p_code,
+      department_or_domain = p_department_or_domain,
+      credits_or_weight = p_credits_or_weight,
+      level = p_level,
+      sequence_position = p_sequence_position,
+      learning_outcomes = p_learning_outcomes,
+      syllabus = p_syllabus,
+      status = p_status,
+      domain_id = p_domain_id,
+      is_active = p_is_active
+  where id = p_course_id;
+
+  if not found then
+    raise exception 'Course not found.';
+  end if;
+
+  delete from course_requirement_blocks
+  where course_id = p_course_id
+    and requirement_block_id not in (select unnest(cleaned_blocks));
+
+  insert into course_requirement_blocks (
+    course_id,
+    requirement_block_id,
+    created_by
+  )
+  select p_course_id, block_id, auth.uid()
+  from unnest(cleaned_blocks) as block_id
+  where not exists (
+    select 1
+    from course_requirement_blocks crb
+    where crb.course_id = p_course_id
+      and crb.requirement_block_id = block_id
+  );
 end;
 $$ language plpgsql;
 
@@ -681,6 +1135,11 @@ drop trigger if exists submissions_immutable_fields on submissions;
 drop trigger if exists course_requirement_block_program_check on course_requirement_blocks;
 drop trigger if exists submission_evaluations_integrity on submission_evaluations;
 drop trigger if exists rsyn720_stage_gate_trg on submissions;
+drop trigger if exists courses_require_requirement_block on courses;
+drop trigger if exists course_requirement_blocks_not_empty on course_requirement_blocks;
+drop trigger if exists modules_parent_immutable on modules;
+drop trigger if exists readings_parent_immutable on readings;
+drop trigger if exists assignments_parent_immutable on assignments;
 
 create trigger submissions_version_integrity
 before insert on submissions
@@ -698,6 +1157,28 @@ create trigger course_requirement_block_program_check
 before insert or update on course_requirement_blocks
 for each row execute function ensure_course_requirement_block_program();
 
+create constraint trigger courses_require_requirement_block
+after insert or update on courses
+deferrable initially deferred
+for each row execute function ensure_course_has_requirement_block();
+
+create constraint trigger course_requirement_blocks_not_empty
+after delete on course_requirement_blocks
+deferrable initially deferred
+for each row execute function ensure_course_requirement_blocks_present();
+
+create trigger modules_parent_immutable
+before update on modules
+for each row execute function prevent_module_parent_change();
+
+create trigger readings_parent_immutable
+before update on readings
+for each row execute function prevent_reading_parent_change();
+
+create trigger assignments_parent_immutable
+before update on assignments
+for each row execute function prevent_assignment_parent_change();
+
 create trigger submission_evaluations_integrity
 before insert or update on submission_evaluations
 for each row execute function enforce_submission_evaluation_integrity();
@@ -709,6 +1190,7 @@ for each row execute function enforce_rsyn720_stage_gating();
 -- RLS
 alter table programs enable row level security;
 alter table program_members enable row level security;
+alter table review_links enable row level security;
 alter table domains enable row level security;
 alter table courses enable row level security;
 alter table course_prerequisites enable row level security;
@@ -719,6 +1201,8 @@ alter table assignments enable row level security;
 alter table readings enable row level security;
 alter table submissions enable row level security;
 alter table critiques enable row level security;
+alter table thesis_projects enable row level security;
+alter table thesis_milestones enable row level security;
 alter table submission_evaluations enable row level security;
 alter table concepts enable row level security;
 
@@ -747,6 +1231,10 @@ Drop policy if exists "Program members select" on program_members;
 Drop policy if exists "Program members insert" on program_members;
 Drop policy if exists "Program members update" on program_members;
 Drop policy if exists "Program members delete" on program_members;
+Drop policy if exists "Review links select" on review_links;
+Drop policy if exists "Review links insert" on review_links;
+Drop policy if exists "Review links update" on review_links;
+Drop policy if exists "Review links delete" on review_links;
 
 -- Hard reset: drop any remaining policies on programs/program_members (prevents recursion from legacy policies)
 do $$
@@ -798,6 +1286,14 @@ Drop policy if exists "Submissions insert" on submissions;
 Drop policy if exists "Submissions update" on submissions;
 Drop policy if exists "Critiques select" on critiques;
 Drop policy if exists "Critiques insert" on critiques;
+Drop policy if exists "Thesis projects select" on thesis_projects;
+Drop policy if exists "Thesis projects insert" on thesis_projects;
+Drop policy if exists "Thesis projects update" on thesis_projects;
+Drop policy if exists "Thesis projects delete" on thesis_projects;
+Drop policy if exists "Thesis milestones select" on thesis_milestones;
+Drop policy if exists "Thesis milestones insert" on thesis_milestones;
+Drop policy if exists "Thesis milestones update" on thesis_milestones;
+Drop policy if exists "Thesis milestones delete" on thesis_milestones;
 Drop policy if exists "Submission evaluations select" on submission_evaluations;
 Drop policy if exists "Submission evaluations insert" on submission_evaluations;
 Drop policy if exists "Submission evaluations update" on submission_evaluations;
@@ -1486,6 +1982,120 @@ create policy "Critiques insert" on critiques
       select 1 from submissions s
       where s.id = critiques.submission_id
         and s.user_id = auth.uid()
+    )
+  );
+
+-- Thesis projects
+create policy "Thesis projects select" on thesis_projects
+  for select to authenticated
+  using (
+    private.is_program_owner(thesis_projects.program_id, auth.uid())
+    or private.is_program_member(thesis_projects.program_id, auth.uid())
+  );
+
+create policy "Thesis projects insert" on thesis_projects
+  for insert to authenticated
+  with check (
+    created_by = auth.uid()
+    and (
+      private.is_program_owner(thesis_projects.program_id, auth.uid())
+      or exists (
+        select 1 from program_members pm
+        where pm.program_id = thesis_projects.program_id
+          and pm.user_id = auth.uid()
+          and pm.role in ('owner', 'admin', 'staff')
+      )
+    )
+  );
+
+create policy "Thesis projects update" on thesis_projects
+  for update to authenticated
+  using (
+    private.is_program_owner(thesis_projects.program_id, auth.uid())
+    or exists (
+      select 1 from program_members pm
+      where pm.program_id = thesis_projects.program_id
+        and pm.user_id = auth.uid()
+        and pm.role in ('owner', 'admin', 'staff')
+    )
+  )
+  with check (
+    created_by = auth.uid()
+    or private.is_program_owner(thesis_projects.program_id, auth.uid())
+  );
+
+create policy "Thesis projects delete" on thesis_projects
+  for delete to authenticated
+  using (
+    private.is_program_owner(thesis_projects.program_id, auth.uid())
+  );
+
+-- Thesis milestones
+create policy "Thesis milestones select" on thesis_milestones
+  for select to authenticated
+  using (
+    exists (
+      select 1 from thesis_projects tp
+      where tp.id = thesis_milestones.thesis_project_id
+        and (
+          private.is_program_owner(tp.program_id, auth.uid())
+          or private.is_program_member(tp.program_id, auth.uid())
+        )
+    )
+  );
+
+create policy "Thesis milestones insert" on thesis_milestones
+  for insert to authenticated
+  with check (
+    created_by = auth.uid()
+    and exists (
+      select 1 from thesis_projects tp
+      where tp.id = thesis_milestones.thesis_project_id
+        and (
+          private.is_program_owner(tp.program_id, auth.uid())
+          or exists (
+            select 1 from program_members pm
+            where pm.program_id = tp.program_id
+              and pm.user_id = auth.uid()
+              and pm.role in ('owner', 'admin', 'staff')
+          )
+        )
+    )
+  );
+
+create policy "Thesis milestones update" on thesis_milestones
+  for update to authenticated
+  using (
+    exists (
+      select 1 from thesis_projects tp
+      where tp.id = thesis_milestones.thesis_project_id
+        and (
+          private.is_program_owner(tp.program_id, auth.uid())
+          or exists (
+            select 1 from program_members pm
+            where pm.program_id = tp.program_id
+              and pm.user_id = auth.uid()
+              and pm.role in ('owner', 'admin', 'staff')
+          )
+        )
+    )
+  )
+  with check (
+    created_by = auth.uid()
+    or exists (
+      select 1 from thesis_projects tp
+      where tp.id = thesis_milestones.thesis_project_id
+        and private.is_program_owner(tp.program_id, auth.uid())
+    )
+  );
+
+create policy "Thesis milestones delete" on thesis_milestones
+  for delete to authenticated
+  using (
+    exists (
+      select 1 from thesis_projects tp
+      where tp.id = thesis_milestones.thesis_project_id
+        and private.is_program_owner(tp.program_id, auth.uid())
     )
   );
 

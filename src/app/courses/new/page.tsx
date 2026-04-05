@@ -37,8 +37,21 @@ export default async function NewCoursePage({
     .select("id, title, code")
     .order("title");
 
+  const { data: requirementBlocks } = await supabase
+    .from("requirement_blocks")
+    .select("id, title, description, category, program:program_id(id, title), position")
+    .order("position", { ascending: true });
+
   const defaultProgramId =
     programId ?? (programs?.length ? programs[0].id : "");
+
+  const blocksByProgram = new Map<string, NonNullable<typeof requirementBlocks>>();
+  (requirementBlocks ?? []).forEach((block) => {
+    const programTitle = block.program?.title ?? "Program";
+    const list = blocksByProgram.get(programTitle) ?? [];
+    list.push(block);
+    blocksByProgram.set(programTitle, list);
+  });
 
   return (
     <ProtectedShell userEmail={user.email ?? null}>
@@ -168,6 +181,22 @@ export default async function NewCoursePage({
               </div>
               <div className="space-y-2">
                 <label className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Sequence Position
+                </label>
+                <input
+                  name="sequencePosition"
+                  type="number"
+                  min="0"
+                  step="1"
+                  required
+                  className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                />
+                <p className="text-xs text-[var(--muted)]">
+                  Lower numbers come earlier in the curriculum.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                   Status
                 </label>
                 <select
@@ -243,6 +272,46 @@ export default async function NewCoursePage({
                 </div>
               ) : (
                 <p className="text-sm text-[var(--muted)]">No other courses yet.</p>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                Requirement Block Placement (Required)
+              </p>
+              {requirementBlocks?.length ? (
+                <div className="space-y-4">
+                  {Array.from(blocksByProgram.entries()).map(([programTitle, blocks]) => (
+                    <div key={programTitle} className="space-y-2">
+                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                        {programTitle}
+                      </p>
+                      <div className="grid gap-2 md:grid-cols-2">
+                        {blocks.map((block) => (
+                          <label
+                            key={block.id}
+                            className="flex items-start gap-3 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                          >
+                            <input
+                              type="checkbox"
+                              name="requirementBlockIds"
+                              value={block.id}
+                              className="mt-1 h-4 w-4"
+                            />
+                            <span>
+                              {block.title}
+                              {block.category ? ` · ${block.category}` : ""}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-[var(--muted)]">
+                  No requirement blocks yet. Create a program requirement block before adding courses.
+                </p>
               )}
             </div>
 

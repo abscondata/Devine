@@ -1,9 +1,20 @@
 ﻿import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import {
+  buildAssignmentStatusMap,
+  getCourseStanding,
+  getProgramRequirementSummary,
+  getStandingStatus,
+  getTranscriptLiteSummary,
+  buildReadinessByCourse,
+  summarizeRequirementBlocks,
+} from "@/lib/academic-standing";
+import {
+  buildMissingThesisSummary,
+  buildThesisSummaryByCourseId,
+} from "@/lib/thesis-governance";
 import { ProtectedShell } from "@/components/protected-shell";
-
-const COMPLETED_READING_STATUSES = new Set(["complete"]);
 
 type CourseStatus = "completed" | "in_progress" | "not_started";
 
@@ -57,7 +68,7 @@ export default async function ProgramAuditPage({
   const { data: requirementBlocks } = await supabase
     .from("requirement_blocks")
     .select(
-      "id, title, description, category, minimum_courses_required, minimum_credits_required, position"
+      "id, program_id, title, description, category, minimum_courses_required, minimum_credits_required, position"
     )
     .eq("program_id", id)
     .order("position", { ascending: true });
@@ -143,34 +154,28 @@ export default async function ProgramAuditPage({
         .in("submission_id", finalSubmissionIds)
     : { data: [] };
 
-  const finalSet = new Set(finalSubmissions.map((item) => item.assignment_id));
-  const critiquesBySubmission = new Map<string, number>();
-  critiques?.forEach((critique) => {
-    critiquesBySubmission.set(
-      critique.submission_id,
-      (critiquesBySubmission.get(critique.submission_id) ?? 0) + 1
-    );
-  });
+  const { data: thesisProjects } = await supabase
+    .from("thesis_projects")
+    .select(
+      "id, program_id, course_id, title, research_question, governing_problem, thesis_claim, scope_statement, status, opened_at, candidacy_established_at, prospectus_locked_at, final_submitted_at"
+    )
+    .eq("program_id", id);
 
-  const assignmentStatus = new Map<
-    string,
-    { hasFinal: boolean; hasDraft: boolean; hasCritique: boolean }
-  >();
-  submissions?.forEach((submission) => {
-    const current = assignmentStatus.get(submission.assignment_id) ?? {
-      hasFinal: false,
-      hasDraft: false,
-      hasCritique: false,
-    };
-    if (submission.is_final) {
-      current.hasFinal = true;
-      if ((critiquesBySubmission.get(submission.id) ?? 0) > 0) {
-        current.hasCritique = true;
-      }
-    } else {
-      current.hasDraft = true;
-    }
-    assignmentStatus.set(submission.assignment_id, current);
+  const thesisProjectIds = thesisProjects?.map((project) => project.id) ?? [];
+  const { data: thesisMilestones } = thesisProjectIds.length
+    ? await supabase
+        .from("thesis_milestones")
+        .select(
+          "id, thesis_project_id, milestone_key, title, position, required, completed_at, submission_id"
+        )
+        .in("thesis_project_id", thesisProjectIds)
+    : { data: [] };
+
+  const assignmentStatus = buildAssignmentStatusMap(submissions ?? [], critiques ?? []);
+  const thesisSummaryByCourseId = buildThesisSummaryByCourseId({
+    projects: thesisProjects ?? [],
+    milestones: thesisMilestones ?? [],
+    finalSubmissionIds: new Set(finalSubmissionIds),
   });
 
   const modulesByCourse = new Map<string, { id: string }[]>();
@@ -217,59 +222,6 @@ export default async function ProgramAuditPage({
     }
   });
 
-  const courseReadingStats = new Map<
-    string,
-    { totalReadings: number; completedReadings: number; skippedReadings: number }
-  >();
-  readings?.forEach((reading) => {
-    const courseId = moduleToCourse.get(reading.module_id);
-    if (!courseId) return;
-    const stats = courseReadingStats.get(courseId) ?? {
-      totalReadings: 0,
-      completedReadings: 0,
-      skippedReadings: 0,
-    };
-    stats.totalReadings += 1;
-    if (COMPLETED_READING_STATUSES.has(reading.status)) {
-      stats.completedReadings += 1;
-    }
-    if (reading.status === "skipped") {
-      stats.skippedReadings += 1;
-    }
-    courseReadingStats.set(courseId, stats);
-  });
-
-  const courseAssignmentStats = new Map<
-    string,
-    {
-      totalAssignments: number;
-      finalAssignments: number;
-      draftAssignments: number;
-      critiquedFinals: number;
-    }
-  >();
-  assignments?.forEach((assignment) => {
-    const courseId = moduleToCourse.get(assignment.module_id);
-    if (!courseId) return;
-    const stats = courseAssignmentStats.get(courseId) ?? {
-      totalAssignments: 0,
-      finalAssignments: 0,
-      draftAssignments: 0,
-      critiquedFinals: 0,
-    };
-    stats.totalAssignments += 1;
-    const status = assignmentStatus.get(assignment.id);
-    if (status?.hasFinal) {
-      stats.finalAssignments += 1;
-      if (status.hasCritique) {
-        stats.critiquedFinals += 1;
-      }
-    } else if (status?.hasDraft) {
-      stats.draftAssignments += 1;
-    }
-    courseAssignmentStats.set(courseId, stats);
-  });
-
   const courseProgress = new Map<
     string,
     {
@@ -288,53 +240,46 @@ export default async function ProgramAuditPage({
 
   (courses ?? []).forEach((course) => {
     const courseModules = modulesByCourse.get(course.id) ?? [];
-    let totalTasks = 0;
-    let completedTasks = 0;
-
-    courseModules.forEach((module) => {
-      const moduleReadings = readingsByModule.get(module.id) ?? [];
-      const moduleAssignments = assignmentsByModule.get(module.id) ?? [];
-      totalTasks += moduleReadings.length + moduleAssignments.length;
-      completedTasks +=
-        moduleReadings.filter((reading) =>
-          COMPLETED_READING_STATUSES.has(reading.status)
-        ).length +
-        moduleAssignments.filter((assignment) => finalSet.has(assignment.id)).length;
+    const thesisSummary =
+      course.code === "RSYN 720"
+        ? thesisSummaryByCourseId.get(course.id) ?? buildMissingThesisSummary()
+        : null;
+    const standing = getCourseStanding({
+      modules: courseModules,
+      readingsByModule,
+      assignmentsByModule,
+      assignmentStatus,
+      thesisSummary,
     });
-
-    let status: CourseStatus = "not_started";
-    if (totalTasks > 0 && completedTasks >= totalTasks) {
-      status = "completed";
-    } else if (completedTasks > 0) {
-      status = "in_progress";
-    }
+    const status = getStandingStatus(standing.completion);
 
     courseProgress.set(course.id, {
       status,
-      completedTasks,
-      totalTasks,
-      ...(courseAssignmentStats.get(course.id) ?? {
-        totalAssignments: 0,
-        finalAssignments: 0,
-        draftAssignments: 0,
-        critiquedFinals: 0,
-      }),
-      unreadReadings:
-        (courseReadingStats.get(course.id)?.totalReadings ?? 0) -
-        (courseReadingStats.get(course.id)?.completedReadings ?? 0),
-      skippedReadings: courseReadingStats.get(course.id)?.skippedReadings ?? 0,
-      missingFinals:
-        (courseAssignmentStats.get(course.id)?.totalAssignments ?? 0) -
-        (courseAssignmentStats.get(course.id)?.finalAssignments ?? 0),
+      completedTasks: standing.completion.completedTasks,
+      totalTasks: standing.completion.totalTasks,
+      ...standing.assignmentSummary,
+      unreadReadings: standing.readingCounts.incompleteReadings,
+      skippedReadings: standing.readingCounts.skippedReadings,
+      missingFinals: standing.completion.missingFinals,
     });
   });
 
   const completionByCourse = new Map<string, boolean>();
+  const completedCourseIds = new Set<string>();
+  const inProgressCourseIds = new Set<string>();
   courseProgress.forEach((progress, courseId) => {
-    completionByCourse.set(
-      courseId,
-      progress.totalTasks > 0 && progress.completedTasks >= progress.totalTasks
-    );
+    const isComplete = progress.status === "completed";
+    completionByCourse.set(courseId, isComplete);
+    if (isComplete) {
+      completedCourseIds.add(courseId);
+    } else if (progress.status === "in_progress") {
+      inProgressCourseIds.add(courseId);
+    }
+  });
+  const readinessByCourse = buildReadinessByCourse({
+    courseIds,
+    prereqsByCourse,
+    completionByCourse,
   });
 
   const courseStatusList = (courses ?? []).map((course) => ({
@@ -343,16 +288,38 @@ export default async function ProgramAuditPage({
     finalDate: courseFinalDates.get(course.id) ?? null,
   }));
 
-  const completedCourses = courseStatusList.filter(
-    (course) => course.status === "completed"
+  const transcriptLite = getTranscriptLiteSummary(
+    courseStatusList.map((course) => {
+      const progress = courseProgress.get(course.id) ?? {
+        completedTasks: 0,
+        totalTasks: 0,
+      };
+      return {
+        id: course.id,
+        title: course.title,
+        code: course.code,
+        completedTasks: progress.completedTasks,
+        totalTasks: progress.totalTasks,
+        isComplete: course.status === "completed",
+      };
+    })
   );
-  const inProgressCourses = courseStatusList.filter(
-    (course) => course.status === "in_progress"
+  const completedCourses = courseStatusList.filter((course) =>
+    transcriptLite.completedCourseIds.has(course.id)
+  );
+  const inProgressCourses = courseStatusList.filter((course) =>
+    transcriptLite.inProgressCourseIds.has(course.id)
   );
   const notStartedCourses = courseStatusList.filter(
-    (course) => course.status === "not_started"
+    (course) =>
+      !transcriptLite.completedCourseIds.has(course.id) &&
+      !transcriptLite.inProgressCourseIds.has(course.id)
   );
 
+  const coursesById = new Map(
+    (courses ?? []).map((course) => [course.id, course])
+  );
+  const blockMappings: { requirement_block_id: string; course_id: string }[] = [];
   const coursesByBlock = new Map<
     string,
     { id: string; title: string; code: string | null; credits_or_weight: number | null }[]
@@ -368,9 +335,25 @@ export default async function ProgramAuditPage({
     };
     list.push(course);
     coursesByBlock.set(mapping.requirement_block_id, list);
+    blockMappings.push({
+      requirement_block_id: mapping.requirement_block_id,
+      course_id: course.id,
+    });
   });
 
+  const blockProgress = summarizeRequirementBlocks({
+    blocks: requirementBlocks ?? [],
+    mappings: blockMappings,
+    coursesById,
+    completedCourseIds,
+    inProgressCourseIds,
+  });
+  const blockProgressById = new Map(
+    blockProgress.map((summary) => [summary.block.id, summary])
+  );
+
   const blockSummaries = (requirementBlocks ?? []).map((block) => {
+    const progress = blockProgressById.get(block.id);
     const assignedCourses = coursesByBlock.get(block.id) ?? [];
     const courseDetails = assignedCourses.map((course) => {
       const progress = courseProgress.get(course.id) ?? {
@@ -389,12 +372,16 @@ export default async function ProgramAuditPage({
       const unmet = prereqs.filter(
         (prereq) => !(completionByCourse.get(prereq.id) ?? false)
       );
+      const readinessState = readinessByCourse.get(course.id) ?? {
+        status: "blocked",
+        reason: "Prerequisites required.",
+      };
       const readiness =
-        progress.status === "completed"
+        readinessState.status === "completed"
           ? "Completed"
-          : unmet.length
-          ? "Not yet"
-          : "Ready now";
+          : readinessState.status === "ready"
+          ? "Ready now"
+          : "Not yet";
       return {
         ...course,
         ...progress,
@@ -403,41 +390,13 @@ export default async function ProgramAuditPage({
       };
     });
 
-    const completedCourses = courseDetails.filter(
-      (course) => course.status === "completed"
-    );
     const inProgressCourses = courseDetails.filter(
       (course) => course.status === "in_progress"
     );
 
-    const completedCredits = completedCourses.reduce(
-      (sum, course) => sum + (course.credits_or_weight ?? 0),
-      0
-    );
-
-    const missingCourses =
-      block.minimum_courses_required !== null
-        ? Math.max(0, block.minimum_courses_required - completedCourses.length)
-        : null;
-    const missingCredits =
-      block.minimum_credits_required !== null
-        ? Math.max(0, block.minimum_credits_required - completedCredits)
-        : null;
-
-    const isComplete =
-      (missingCourses === null || missingCourses === 0) &&
-      (missingCredits === null || missingCredits === 0);
-
-    const hasActivity =
-      completedCourses.length > 0 ||
-      completedCredits > 0 ||
-      inProgressCourses.length > 0;
-
-    const status = isComplete
-      ? "complete"
-      : hasActivity
-      ? "in progress"
-      : "incomplete";
+    const missingCourses = progress?.missingCourses ?? null;
+    const missingCredits = progress?.missingCredits ?? null;
+    const status = progress?.status ?? (inProgressCourses.length ? "in progress" : "incomplete");
 
     const missingParts: string[] = [];
     if (missingCourses !== null && missingCourses > 0) {
@@ -457,10 +416,9 @@ export default async function ProgramAuditPage({
     };
   });
 
-  const completedBlocks = blockSummaries.filter(
-    (summary) => summary.status === "complete"
-  ).length;
-  const remainingBlocks = Math.max(0, blockSummaries.length - completedBlocks);
+  const programRequirementSummary = getProgramRequirementSummary(blockProgress);
+  const completedBlocks = programRequirementSummary.satisfiedBlocks;
+  const remainingBlocks = programRequirementSummary.remainingBlocks;
 
   const categoryOrder = ["Foundations", "Core", "Advanced", "Capstone"];
   const blocksByCategory = new Map<

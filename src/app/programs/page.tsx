@@ -62,6 +62,9 @@ export default async function ProgramsPage() {
                     <Link href={`/programs/${program.id}/audit`}>
                       Audit requirements
                     </Link>
+                    <Link href={`/programs/${program.id}/record`}>
+                      Academic record
+                    </Link>
                     <Link href={`/programs/${program.id}/requirements/new`}>
                       Add requirement block
                     </Link>
@@ -74,6 +77,20 @@ export default async function ProgramsPage() {
               No programs yet. Create a program to begin structuring requirements.
             </div>
           )}
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-xl font-semibold">Administration</h2>
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm text-[var(--muted)] space-y-2">
+            <p>
+              Institutional governance tools for thesis administration and review
+              access.
+            </p>
+            <div className="flex flex-wrap gap-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+              <Link href="/admin/thesis">Thesis governance</Link>
+              <Link href="/admin/review-links">Review access</Link>
+            </div>
+          </div>
         </section>
       </div>
     </ProtectedShell>

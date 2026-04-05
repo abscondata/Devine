@@ -26,6 +26,16 @@ export default async function NewModulePage({
     .order("title");
 
   const defaultCourseId = courseId ?? (courses?.length ? courses[0].id : "");
+  const { data: latestModule } = defaultCourseId
+    ? await supabase
+        .from("modules")
+        .select("position")
+        .eq("course_id", defaultCourseId)
+        .order("position", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    : { data: null };
+  const defaultPosition = (latestModule?.position ?? -1) + 1;
 
   return (
     <ProtectedShell userEmail={user.email ?? null}>
@@ -95,6 +105,24 @@ export default async function NewModulePage({
                 rows={4}
                 className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
               />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                Module Position
+              </label>
+              <input
+                name="position"
+                type="number"
+                min={0}
+                required
+                defaultValue={defaultPosition}
+                className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+              />
+              <p className="text-xs text-[var(--muted)]">
+                Lower numbers appear earlier in the course sequence. Update this if you
+                change the course selection.
+              </p>
             </div>
 
             <div className="flex items-center gap-3">

@@ -130,15 +130,23 @@ export default async function AssignmentPage({
           >
             {assignment.module?.title ?? "Module"}
           </Link>
-          <div className="space-y-2">
-            <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
-              {assignment.module?.course?.title ?? "Course"}
-            </p>
-            <h1 className="text-3xl font-semibold">{assignment.title}</h1>
-            <div className="flex flex-wrap gap-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              <span>{assignment.assignment_type.replace(/_/g, " ")}</span>
-              <span>{assignment.due_at ? formatDate(assignment.due_at) : "No deadline"}</span>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
+                {assignment.module?.course?.title ?? "Course"}
+              </p>
+              <h1 className="text-3xl font-semibold">{assignment.title}</h1>
+              <div className="flex flex-wrap gap-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                <span>{assignment.assignment_type.replace(/_/g, " ")}</span>
+                <span>{assignment.due_at ? formatDate(assignment.due_at) : "No deadline"}</span>
+              </div>
             </div>
+            <Link
+              href={`/assignments/${assignment.id}/edit`}
+              className="text-sm text-[var(--muted)]"
+            >
+              Edit assignment
+            </Link>
           </div>
         </header>
 

@@ -1,6 +1,6 @@
 # RSYN 720 Capstone Evaluation Policy
 
-This policy defines the evaluation architecture for RSYN 720 (Research and Synthesis: Capstone Thesis and Defense). It establishes auditable standards for assessment, stage advancement, and final completion. It does not alter course structure or requirements.
+This policy defines the evaluation architecture for RSYN 720 (Senior Thesis / Integrated Synthesis). It establishes auditable standards for assessment, stage advancement, and final completion. It does not alter course structure or requirements.
 
 ## Purpose
 RSYN 720 is the culminating capstone. This policy ensures that evaluation is severe, transparent, and auditable, and that the capstone remains distinct from RSYN 710’s method formation.
@@ -36,15 +36,15 @@ Any of the following triggers mandatory resubmission:
 4. Required lane integration missing or merely decorative.
 
 ## Whole-Course Weighting
-1. Prospectus revision: 10%
-2. Annotated source dossier: 15%
-3. Argument architecture and chapter map: 15%
-4. Objections and replies memo: 15%
+1. Thesis question and scope statement: 10%
+2. Annotated bibliography and method memo: 15%
+3. Thesis prospectus: 15%
+4. Draft thesis with objections and replies: 15%
 5. Final thesis: 35%
-6. Defense memo: 10%
+6. Synthesis reflection: 10%
 
-## Defense Memo Gatekeeping Rule
-The defense memo is a hard gate. Failure triggers mandatory resubmission regardless of overall course score.
+## Synthesis Reflection Gatekeeping Rule
+The synthesis reflection is a hard gate. Failure triggers mandatory resubmission regardless of overall course score.
 
 Required objections in the defense:
 1. Philosophical objection
@@ -59,4 +59,4 @@ To complete RSYN 720, all of the following must be true:
 1. All stages passed (or provisional pass with revisions satisfied).
 2. No fail overrides remain active.
 3. The final thesis integrates all four lanes: philosophy, Scripture, doctrine, history.
-4. The defense memo passes as a gatekeeping deliverable.
+4. The synthesis reflection passes as a gatekeeping deliverable.

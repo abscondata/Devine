@@ -2,9 +2,17 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { reorderModule } from "@/lib/actions";
+import {
+  buildAssignmentStatusMap,
+  getCourseStanding,
+  getModuleStanding,
+  getReadinessState,
+} from "@/lib/academic-standing";
+import {
+  buildMissingThesisSummary,
+  buildThesisSummaryByCourseId,
+} from "@/lib/thesis-governance";
 import { ProtectedShell } from "@/components/protected-shell";
-
-const COMPLETED_READING_STATUSES = new Set(["complete"]);
 
 export default async function CoursePage({
   params,
@@ -91,34 +99,28 @@ export default async function CoursePage({
         .in("submission_id", finalSubmissionIds)
     : { data: [] };
 
-  const finalSet = new Set(finalSubmissions.map((item) => item.assignment_id));
-  const critiquesBySubmission = new Map<string, number>();
-  critiques?.forEach((critique) => {
-    critiquesBySubmission.set(
-      critique.submission_id,
-      (critiquesBySubmission.get(critique.submission_id) ?? 0) + 1
-    );
-  });
+  const { data: thesisProjects } = await supabase
+    .from("thesis_projects")
+    .select(
+      "id, program_id, course_id, title, research_question, governing_problem, thesis_claim, scope_statement, status, opened_at, candidacy_established_at, prospectus_locked_at, final_submitted_at"
+    )
+    .eq("course_id", course.id);
 
-  const assignmentStatus = new Map<
-    string,
-    { hasFinal: boolean; hasDraft: boolean; hasCritique: boolean }
-  >();
-  submissions?.forEach((submission) => {
-    const current = assignmentStatus.get(submission.assignment_id) ?? {
-      hasFinal: false,
-      hasDraft: false,
-      hasCritique: false,
-    };
-    if (submission.is_final) {
-      current.hasFinal = true;
-      if ((critiquesBySubmission.get(submission.id) ?? 0) > 0) {
-        current.hasCritique = true;
-      }
-    } else {
-      current.hasDraft = true;
-    }
-    assignmentStatus.set(submission.assignment_id, current);
+  const thesisProjectIds = thesisProjects?.map((project) => project.id) ?? [];
+  const { data: thesisMilestones } = thesisProjectIds.length
+    ? await supabase
+        .from("thesis_milestones")
+        .select(
+          "id, thesis_project_id, milestone_key, title, position, required, completed_at, submission_id"
+        )
+        .in("thesis_project_id", thesisProjectIds)
+    : { data: [] };
+
+  const assignmentStatus = buildAssignmentStatusMap(submissions ?? [], critiques ?? []);
+  const thesisSummaryByCourseId = buildThesisSummaryByCourseId({
+    projects: thesisProjects ?? [],
+    milestones: thesisMilestones ?? [],
+    finalSubmissionIds: new Set(finalSubmissionIds),
   });
 
   const readingsByModule = new Map<string, typeof readings>();
@@ -140,43 +142,14 @@ export default async function CoursePage({
     moduleToCourse.set(module.id, module.course_id);
   });
 
-  const courseReadingStats = {
-    totalReadings: 0,
-    completedReadings: 0,
-    skippedReadings: 0,
-  };
-  readings?.forEach((reading) => {
-    if (moduleToCourse.get(reading.module_id) !== course.id) return;
-    courseReadingStats.totalReadings += 1;
-    if (COMPLETED_READING_STATUSES.has(reading.status)) {
-      courseReadingStats.completedReadings += 1;
-    }
-    if (reading.status === "skipped") {
-      courseReadingStats.skippedReadings += 1;
-    }
-  });
-
-  const totalAssignments = assignments?.length ?? 0;
-  const finalAssignments = finalSubmissions.length;
-  const draftAssignments = (assignments ?? []).filter((assignment) => {
-    const status = assignmentStatus.get(assignment.id);
-    return status?.hasDraft && !status?.hasFinal;
-  }).length;
-  const critiquedFinals = finalSubmissions.filter(
-    (submission) => (critiquesBySubmission.get(submission.id) ?? 0) > 0
-  ).length;
-
   const moduleSummaries = (modules ?? []).map((module, index) => {
     const moduleReadings = readingsByModule.get(module.id) ?? [];
     const moduleAssignments = assignmentsByModule.get(module.id) ?? [];
-    const completedReadings = moduleReadings.filter((reading) =>
-      COMPLETED_READING_STATUSES.has(reading.status)
-    ).length;
-    const completedAssignments = moduleAssignments.filter((assignment) =>
-      finalSet.has(assignment.id)
-    ).length;
-    const totalTasks = moduleReadings.length + moduleAssignments.length;
-    const completedTasks = completedReadings + completedAssignments;
+    const moduleStanding = getModuleStanding({
+      readings: moduleReadings,
+      assignments: moduleAssignments,
+      assignmentStatus,
+    });
     const estimatedHours = moduleReadings.reduce(
       (sum, reading) => sum + (reading.estimated_hours ?? 0),
       0
@@ -184,8 +157,8 @@ export default async function CoursePage({
 
     return {
       ...module,
-      totalTasks,
-      completedTasks,
+      totalTasks: moduleStanding.completion.totalTasks,
+      completedTasks: moduleStanding.completion.completedTasks,
       estimatedHours,
       isFirst: index === 0,
       isLast: index === (modules?.length ?? 0) - 1,
@@ -196,22 +169,26 @@ export default async function CoursePage({
     (module) => module.totalTasks > 0 && module.completedTasks < module.totalTasks
   );
 
-  const totalTasks = moduleSummaries.reduce(
-    (sum, module) => sum + module.totalTasks,
-    0
-  );
-  const completedTasks = moduleSummaries.reduce(
-    (sum, module) => sum + module.completedTasks,
-    0
-  );
+  const courseStanding = getCourseStanding({
+    modules: modules ?? [],
+    readingsByModule,
+    assignmentsByModule,
+    assignmentStatus,
+    thesisSummary:
+      course.code === "RSYN 720"
+        ? thesisSummaryByCourseId.get(course.id) ?? buildMissingThesisSummary()
+        : null,
+  });
+  const totalTasks = courseStanding.completion.totalTasks;
+  const completedTasks = courseStanding.completion.completedTasks;
   const totalHours = moduleSummaries.reduce(
     (sum, module) => sum + module.estimatedHours,
     0
   );
-
-  const unreadReadings =
-    courseReadingStats.totalReadings - courseReadingStats.completedReadings;
-  const missingFinals = totalAssignments - finalAssignments;
+  const { unreadReadings, skippedReadings, missingFinals } =
+    courseStanding.completion;
+  const { totalAssignments, finalAssignments, draftAssignments, critiquedFinals } =
+    courseStanding.assignmentSummary;
 
   const { data: prereqModules } = prerequisiteCourses.length
     ? await supabase
@@ -274,13 +251,20 @@ export default async function CoursePage({
     courseModules.forEach((module) => {
       const moduleReadings = prereqReadingsByModule.get(module.id) ?? [];
       const moduleAssignments = prereqAssignmentsByModule.get(module.id) ?? [];
-      totalTasks += moduleReadings.length + moduleAssignments.length;
-      completedTasks +=
-        moduleReadings.filter((reading) =>
-          COMPLETED_READING_STATUSES.has(reading.status)
-        ).length +
-        moduleAssignments.filter((assignment) => prereqFinalSet.has(assignment.id))
-          .length;
+      const moduleStanding = getModuleStanding({
+        readings: moduleReadings,
+        assignments: moduleAssignments,
+        assignmentStatus: new Map(
+          moduleAssignments
+            .filter((assignment) => prereqFinalSet.has(assignment.id))
+            .map((assignment) => [
+              assignment.id,
+              { hasFinal: true, hasDraft: false, hasCritique: false },
+            ])
+        ),
+      });
+      totalTasks += moduleStanding.completion.totalTasks;
+      completedTasks += moduleStanding.completion.completedTasks;
     });
     prereqCompletion.set(
       course.id,
@@ -291,12 +275,18 @@ export default async function CoursePage({
   const unmetPrereqs = prerequisiteCourses.filter(
     (course) => !(prereqCompletion.get(course.id) ?? false)
   );
-  const isCourseComplete = totalTasks > 0 && completedTasks >= totalTasks;
-  const readinessStatus = isCourseComplete
-    ? "Completed"
-    : unmetPrereqs.length
-    ? "Not yet"
-    : "Ready now";
+  const isCourseComplete = courseStanding.completion.isComplete;
+  const readinessState = getReadinessState({
+    isComplete: isCourseComplete,
+    unmetPrereqs,
+    hasPrereqs: prerequisiteCourses.length > 0,
+  });
+  const readinessStatus =
+    readinessState.status === "completed"
+      ? "Completed"
+      : readinessState.status === "ready"
+      ? "Ready now"
+      : "Not yet";
 
   const foundationOrder = ["PHIL 501", "THEO 510", "HIST 520", "SCRP 530"];
   const isFoundationCourse = foundationOrder.includes(course.code ?? "");
@@ -356,6 +346,12 @@ export default async function CoursePage({
                 Critiqued {critiquedFinals}/{finalAssignments}
               </span>
             ) : null}
+            <Link
+              href={`/courses/${course.id}/dossier`}
+              className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
+            >
+              Course dossier
+            </Link>
           </div>
         </header>
 
@@ -365,9 +361,14 @@ export default async function CoursePage({
             <p>
               Official completion requires all readings marked complete (skipped
               readings do not count) and final submissions for every assignment.
-              Critiques are recommended but do not determine completion.
+              Critiques are recommended but do not determine completion. RSYN 720
+              additionally requires an active thesis project with all required
+              milestones complete.
             </p>
-            {unreadReadings === 0 && missingFinals === 0 ? (
+            {unreadReadings === 0 &&
+            skippedReadings === 0 &&
+            missingFinals === 0 &&
+            !courseStanding.completion.thesisIncomplete ? (
               <p className="text-sm font-semibold text-[var(--text)]">
                 This course is officially complete.
               </p>
@@ -382,26 +383,33 @@ export default async function CoursePage({
                       {unreadReadings} reading{unreadReadings === 1 ? "" : "s"} not complete
                     </li>
                   ) : null}
-                  {courseReadingStats.skippedReadings > 0 ? (
-                    <li>
-                      {courseReadingStats.skippedReadings} reading
-                      {courseReadingStats.skippedReadings === 1 ? "" : "s"} skipped
-                      (do not count)
-                    </li>
-                  ) : null}
+                    {skippedReadings > 0 ? (
+                      <li>
+                        {skippedReadings} reading
+                        {skippedReadings === 1 ? "" : "s"} skipped
+                        (do not count)
+                      </li>
+                    ) : null}
                   {missingFinals > 0 ? (
                     <li>
-                      {missingFinals} assignment{missingFinals === 1 ? "" : "s"} missing final submission
-                    </li>
-                  ) : null}
-                  {draftAssignments > 0 ? (
-                    <li>
-                      {draftAssignments} assignment{draftAssignments === 1 ? "" : "s"} with draft only
-                    </li>
-                  ) : null}
-                </ul>
-              </div>
-            )}
+                  {missingFinals} assignment{missingFinals === 1 ? "" : "s"} missing final submission
+                </li>
+              ) : null}
+              {draftAssignments > 0 ? (
+                <li>
+                  {draftAssignments} assignment{draftAssignments === 1 ? "" : "s"} with draft only
+                </li>
+              ) : null}
+              {courseStanding.completion.thesisIncomplete ? (
+                <li>
+                  {courseStanding.thesis?.hasProject
+                    ? "Thesis milestones remain incomplete."
+                    : "No thesis project recorded for RSYN 720."}
+                </li>
+              ) : null}
+            </ul>
+          </div>
+        )}
           </div>
         </section>
 
