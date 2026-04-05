@@ -227,216 +227,130 @@ export default async function AssignmentPage({
           </div>
         </section>
 
-        <section className="space-y-4">
-          <h2 className="text-lg">Submission History</h2>
-          {hasPostFinalDrafts && finalSubmission ? (
-            <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--muted)]">
-              Drafts exist after the locked final (version {finalSubmission.version}).
-              These later drafts do not alter the official record.
-            </div>
-          ) : null}
+        {/* ─���─ Submission record ─── */}
+        <section className="space-y-3">
+          <h2 className="text-lg">Submission Record</h2>
           {submissions?.length ? (
-            <div className="space-y-6">
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
               {submissions.map((submission) => {
                 const critiqueList = critiquesBySubmission.get(submission.id) ?? [];
                 const isLatest = latestVersion === submission.version;
+                const latestCritiqueForVersion = critiqueList[0];
 
                 return (
-                  <div
-                    key={submission.id}
-                    className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-4"
-                  >
+                  <div key={submission.id} className="p-5 space-y-4">
+                    {/* Version header */}
                     <div className="flex flex-wrap items-center justify-between gap-4">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                          Version {submission.version}
-                        </p>
-                        <p className="text-sm text-[var(--muted)]">
-                          Submitted {formatDate(submission.created_at)}
-                        </p>
+                      <div className="flex flex-wrap items-center gap-x-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                        <span>Version {submission.version}</span>
+                        <span>{submission.is_final ? "Final" : "Draft"}</span>
+                        <span>{formatDate(submission.created_at)}</span>
                       </div>
-                      <div className="flex flex-wrap items-center gap-3">
-                        <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                          {submission.is_final ? "Final" : "Draft"}
-                        </span>
+                      <div className="flex flex-wrap items-center gap-2">
                         {!submission.is_final && !hasFinal && isLatest ? (
                           <form action={setFinalSubmission}>
-                            <input
-                              type="hidden"
-                              name="submissionId"
-                              value={submission.id}
-                            />
-                            <input
-                              type="hidden"
-                              name="assignmentId"
-                              value={assignment.id}
-                            />
-                            <button
-                              type="submit"
-                              className="rounded-md border border-[var(--border)] px-3 py-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
-                            >
-                                Mark Final
-                              </button>
-                            </form>
+                            <input type="hidden" name="submissionId" value={submission.id} />
+                            <input type="hidden" name="assignmentId" value={assignment.id} />
+                            <button type="submit" className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)]">
+                              Mark final
+                            </button>
+                          </form>
                         ) : null}
                         <form action={runCritique}>
-                          <input
-                            type="hidden"
-                            name="submissionId"
-                            value={submission.id}
-                          />
-                          <input
-                            type="hidden"
-                            name="assignmentId"
-                            value={assignment.id}
-                          />
-                          <button
-                            type="submit"
-                            className="rounded-md border border-[var(--border)] px-3 py-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
-                          >
-                            Run Critique
+                          <input type="hidden" name="submissionId" value={submission.id} />
+                          <input type="hidden" name="assignmentId" value={assignment.id} />
+                          <button type="submit" className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)]">
+                            Request critique
                           </button>
                         </form>
                       </div>
                     </div>
 
-                    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4 text-sm whitespace-pre-wrap">
-                      {submission.content}
-                    </div>
-
-                    <div className="space-y-4">
-                      <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-                        Critiques
-                      </h3>
-                      <p className="text-sm text-[var(--muted)]">
-                        Critiques are advisory and recommended for depth. Official completion
-                        is determined by finalized submissions and completed readings, not by
-                        critique presence.
+                    {/* Submission text — shown for latest/final, collapsed hint for older */}
+                    {(isLatest || submission.is_final) ? (
+                      <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4 font-serif text-sm leading-relaxed whitespace-pre-wrap max-h-64 overflow-y-auto">
+                        {submission.content}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-[var(--muted)]">
+                        {submission.content.length} characters · Expand assignment to view full text.
                       </p>
-                      {critiqueList.length ? (
-                        <div className="space-y-4">
-                          {critiqueList.map((critique) => {
-                            const structuralFailures = critique.structural_failures ?? [];
-                            const unsupportedClaims = critique.unsupported_claims ?? [];
-                            const vagueTerms = critique.vague_terms ?? [];
-                            const doctrinalImprecision =
-                              critique.doctrinal_or_historical_imprecision ?? [];
-                            const rewritePriorities = critique.rewrite_priorities ?? [];
+                    )}
 
-                            return (
-                              <div
-                                key={critique.id}
-                                className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 space-y-3"
-                              >
-                                <div className="flex flex-wrap gap-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                                  <span>Version {critique.submission_version}</span>
-                                  <span>{formatDate(critique.created_at)}</span>
-                                  {critique.model ? <span>{critique.model}</span> : null}
-                                  {critique.prompt_version ? (
-                                    <span>Prompt {critique.prompt_version}</span>
-                                  ) : null}
-                                  {critique.score !== null && critique.score !== undefined ? (
-                                    <span>Score {critique.score}</span>
-                                  ) : null}
-                                </div>
-                                <p className="text-xs text-[var(--muted)]">
-                                  Critique attached to submission version{" "}
-                                  {critique.submission_version}.
-                                </p>
-
-                              {critique.overall_verdict ? (
-                                <p className="text-sm">
-                                  <span className="font-semibold">Verdict:</span>{" "}
-                                  {critique.overall_verdict}
-                                </p>
-                              ) : null}
-
-                              {critique.thesis_strength ? (
-                                <p className="text-sm">
-                                  <span className="font-semibold">Thesis strength:</span>{" "}
-                                  {critique.thesis_strength}
-                                </p>
-                              ) : null}
-
-                              {critique.strongest_objection ? (
-                                <p className="text-sm">
-                                  <span className="font-semibold">Strongest objection:</span>{" "}
-                                  {critique.strongest_objection}
-                                </p>
-                              ) : null}
-
-                              {structuralFailures.length ? (
-                                <div className="text-sm">
-                                  <p className="font-semibold">Structural failures</p>
-                                  <ul className="list-disc pl-5 text-[var(--muted)]">
-                                    {structuralFailures.map((item, index) => (
-                                      <li key={`${critique.id}-sf-${index}`}>{item}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              ) : null}
-
-                              {unsupportedClaims.length ? (
-                                <div className="text-sm">
-                                  <p className="font-semibold">Unsupported claims</p>
-                                  <ul className="list-disc pl-5 text-[var(--muted)]">
-                                    {unsupportedClaims.map((item, index) => (
-                                      <li key={`${critique.id}-uc-${index}`}>{item}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              ) : null}
-
-                              {vagueTerms.length ? (
-                                <div className="text-sm">
-                                  <p className="font-semibold">Vague terms</p>
-                                  <ul className="list-disc pl-5 text-[var(--muted)]">
-                                    {vagueTerms.map((item, index) => (
-                                      <li key={`${critique.id}-vt-${index}`}>{item}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              ) : null}
-
-                              {doctrinalImprecision.length ? (
-                                <div className="text-sm">
-                                  <p className="font-semibold">
-                                    Doctrinal or historical imprecision
-                                  </p>
-                                  <ul className="list-disc pl-5 text-[var(--muted)]">
-                                    {doctrinalImprecision.map((item, index) => (
-                                      <li key={`${critique.id}-dh-${index}`}>{item}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              ) : null}
-
-                              {rewritePriorities.length ? (
-                                <div className="text-sm">
-                                  <p className="font-semibold">Rewrite priorities</p>
-                                  <ul className="list-disc pl-5 text-[var(--muted)]">
-                                    {rewritePriorities.map((item, index) => (
-                                      <li key={`${critique.id}-rp-${index}`}>{item}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              ) : null}
-                              </div>
-                            );
-                          })}
+                    {/* Critique �� structured academic feedback */}
+                    {latestCritiqueForVersion ? (
+                      <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
+                        <div className="flex flex-wrap items-center gap-x-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                          <span>Critique</span>
+                          <span>{formatDate(latestCritiqueForVersion.created_at)}</span>
+                          {latestCritiqueForVersion.score !== null && latestCritiqueForVersion.score !== undefined ? (
+                            <span>Score {latestCritiqueForVersion.score}</span>
+                          ) : null}
                         </div>
-                      ) : (
-                        <p className="text-sm text-[var(--muted)]">No critiques yet.</p>
-                      )}
-                    </div>
+
+                        {/* Assessment — the most important part, shown first */}
+                        {latestCritiqueForVersion.overall_verdict ? (
+                          <div className="space-y-1">
+                            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Assessment</p>
+                            <p className="font-serif text-sm leading-relaxed">{latestCritiqueForVersion.overall_verdict}</p>
+                          </div>
+                        ) : null}
+
+                        {/* Strengths */}
+                        {latestCritiqueForVersion.thesis_strength ? (
+                          <div className="space-y-1">
+                            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Thesis strength</p>
+                            <p className="text-sm text-[var(--muted)]">{latestCritiqueForVersion.thesis_strength}</p>
+                          </div>
+                        ) : null}
+
+                        {/* Critical issues ��� grouped */}
+                        {(() => {
+                          const issues = [
+                            ...(latestCritiqueForVersion.structural_failures ?? []).map((i: string) => ({ label: "Structure", text: i })),
+                            ...(latestCritiqueForVersion.unsupported_claims ?? []).map((i: string) => ({ label: "Unsupported", text: i })),
+                            ...(latestCritiqueForVersion.doctrinal_or_historical_imprecision ?? []).map((i: string) => ({ label: "Precision", text: i })),
+                            ...(latestCritiqueForVersion.vague_terms ?? []).map((i: string) => ({ label: "Vague", text: i })),
+                          ];
+                          return issues.length ? (
+                            <div className="space-y-1">
+                              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Issues identified</p>
+                              <ul className="space-y-1 text-sm text-[var(--muted)]">
+                                {issues.map((issue, idx) => (
+                                  <li key={idx}><span className="text-xs uppercase tracking-[0.2em]">{issue.label}:</span> {issue.text}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null;
+                        })()}
+
+                        {/* Strongest objection */}
+                        {latestCritiqueForVersion.strongest_objection ? (
+                          <div className="space-y-1">
+                            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Strongest objection</p>
+                            <p className="text-sm text-[var(--muted)]">{latestCritiqueForVersion.strongest_objection}</p>
+                          </div>
+                        ) : null}
+
+                        {/* Revision direction */}
+                        {(latestCritiqueForVersion.rewrite_priorities ?? []).length ? (
+                          <div className="space-y-1">
+                            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Revision priorities</p>
+                            <ol className="space-y-1 text-sm text-[var(--muted)]">
+                              {(latestCritiqueForVersion.rewrite_priorities as string[]).map((item: string, idx: number) => (
+                                <li key={idx}>{item}</li>
+                              ))}
+                            </ol>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 );
               })}
             </div>
           ) : (
-            <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)]">
-              No submissions yet.
-            </div>
+            <p className="text-sm text-[var(--muted)]">No submissions yet.</p>
           )}
         </section>
       </div>

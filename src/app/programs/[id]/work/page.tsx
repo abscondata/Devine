@@ -1,13 +1,10 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { buildAssignmentStatusMap } from "@/lib/academic-standing";
-import { getCritiqueSummary, getFinalSubmissionSummary } from "@/lib/scholarly-evaluation";
-import { ReviewShell } from "@/components/review-shell";
-import { DocumentSection, FormalDocumentLayout } from "@/components/formal-document";
+import { ProtectedShell } from "@/components/protected-shell";
 
 function formatDate(value?: string | null) {
-  if (!value) return "--";
+  if (!value) return "—";
   return new Date(value).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -15,23 +12,7 @@ function formatDate(value?: string | null) {
   });
 }
 
-type WorkRow = {
-  assignmentId: string;
-  assignmentTitle: string;
-  assignmentType: string;
-  moduleTitle: string;
-  modulePosition: number;
-  courseTitle: string;
-  courseCode: string | null;
-  courseSequence: number | null;
-  finalSubmissionId: string;
-  finalVersion: number;
-  finalDate: string;
-  finalLabel: string;
-  critiqueLabel: string;
-};
-
-export default async function ProgramWorkRecordPage({
+export default async function ProgramWorkPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -48,7 +29,7 @@ export default async function ProgramWorkRecordPage({
 
   const { data: program } = await supabase
     .from("programs")
-    .select("id, title, description")
+    .select("id, title")
     .eq("id", id)
     .single();
 
@@ -56,190 +37,172 @@ export default async function ProgramWorkRecordPage({
     notFound();
   }
 
+  // All courses → modules → assignments → submissions
   const { data: courses } = await supabase
     .from("courses")
     .select("id, title, code, sequence_position")
     .eq("program_id", id)
+    .eq("is_active", true)
     .order("sequence_position", { ascending: true });
 
-  const courseIds = courses?.map((course) => course.id) ?? [];
+  const courseIds = (courses ?? []).map((c) => c.id);
   const { data: modules } = courseIds.length
-    ? await supabase
-        .from("modules")
-        .select("id, course_id, title, position")
-        .in("course_id", courseIds)
-        .order("position", { ascending: true })
+    ? await supabase.from("modules").select("id, course_id, title, position").in("course_id", courseIds).order("position", { ascending: true })
     : { data: [] };
 
-  const moduleIds = modules?.map((module) => module.id) ?? [];
+  const moduleIds = (modules ?? []).map((m) => m.id);
   const { data: assignments } = moduleIds.length
-    ? await supabase
-        .from("assignments")
-        .select("id, module_id, title, assignment_type")
-        .in("module_id", moduleIds)
+    ? await supabase.from("assignments").select("id, module_id, title, assignment_type").in("module_id", moduleIds)
     : { data: [] };
 
-  const assignmentIds = assignments?.map((assignment) => assignment.id) ?? [];
+  const assignmentIds = (assignments ?? []).map((a) => a.id);
   const { data: submissions } = assignmentIds.length
-    ? await supabase
-        .from("submissions")
-        .select("id, assignment_id, is_final, created_at, version")
-        .eq("user_id", user.id)
-        .in("assignment_id", assignmentIds)
+    ? await supabase.from("submissions").select("id, assignment_id, version, is_final, created_at").eq("user_id", user.id).in("assignment_id", assignmentIds).order("version", { ascending: false })
     : { data: [] };
 
-  const finalSubmissions = (submissions ?? []).filter((submission) => submission.is_final);
-  const finalSubmissionIds = finalSubmissions.map((submission) => submission.id);
+  const finalSubmissionIds = (submissions ?? []).filter((s) => s.is_final).map((s) => s.id);
   const { data: critiques } = finalSubmissionIds.length
-    ? await supabase
-        .from("critiques")
-        .select("id, submission_id, submission_version, created_at")
-        .in("submission_id", finalSubmissionIds)
+    ? await supabase.from("critiques").select("id, submission_id").in("submission_id", finalSubmissionIds)
     : { data: [] };
 
-  const assignmentStatus = buildAssignmentStatusMap(submissions ?? [], critiques ?? []);
-  const finalByAssignment = new Map<string, typeof finalSubmissions[0]>();
-  finalSubmissions.forEach((submission) => {
-    finalByAssignment.set(submission.assignment_id, submission);
+  const critiqueSet = new Set((critiques ?? []).map((c) => c.submission_id));
+
+  // Maps
+  const moduleToCourse = new Map<string, string>();
+  (modules ?? []).forEach((m) => moduleToCourse.set(m.id, m.course_id));
+  const coursesById = new Map((courses ?? []).map((c) => [c.id, c]));
+  const modulesById = new Map((modules ?? []).map((m) => [m.id, m]));
+
+  // Build per-assignment summary
+  type WorkItem = {
+    assignmentId: string;
+    assignmentTitle: string;
+    assignmentType: string;
+    courseCode: string | null;
+    courseTitle: string;
+    courseSequence: number | null;
+    moduleTitle: string;
+    modulePosition: number;
+    latestVersion: number | null;
+    isFinal: boolean;
+    finalDate: string | null;
+    hasCritique: boolean;
+    totalVersions: number;
+  };
+
+  type SubRow = NonNullable<typeof submissions>[number];
+  const submissionsByAssignment = new Map<string, SubRow[]>();
+  (submissions ?? []).forEach((s) => {
+    const list = submissionsByAssignment.get(s.assignment_id) ?? [];
+    list.push(s);
+    submissionsByAssignment.set(s.assignment_id, list);
   });
-  const critiqueBySubmission = new Map<
-    string,
-    { submission_version: number | null; created_at: string }
-  >();
-  critiques?.forEach((critique) => {
-    const existing = critiqueBySubmission.get(critique.submission_id);
-    if (!existing || new Date(critique.created_at) > new Date(existing.created_at)) {
-      critiqueBySubmission.set(critique.submission_id, {
-        submission_version: critique.submission_version ?? null,
-        created_at: critique.created_at,
-      });
-    }
+
+  const workItems: WorkItem[] = (assignments ?? []).map((a) => {
+    const courseId = moduleToCourse.get(a.module_id);
+    const course = courseId ? coursesById.get(courseId) : null;
+    const mod = modulesById.get(a.module_id);
+    const subs = submissionsByAssignment.get(a.id) ?? [];
+    const finalSub = subs.find((s) => s.is_final);
+    const latest = subs[0];
+
+    return {
+      assignmentId: a.id,
+      assignmentTitle: a.title,
+      assignmentType: a.assignment_type,
+      courseCode: course?.code ?? null,
+      courseTitle: course?.title ?? "",
+      courseSequence: course?.sequence_position ?? null,
+      moduleTitle: mod?.title ?? "",
+      modulePosition: mod?.position ?? 0,
+      latestVersion: latest?.version ?? null,
+      isFinal: Boolean(finalSub),
+      finalDate: finalSub?.created_at ?? null,
+      hasCritique: finalSub ? critiqueSet.has(finalSub.id) : false,
+      totalVersions: subs.length,
+    };
   });
 
-  const modulesById = new Map(modules?.map((module) => [module.id, module]) ?? []);
-  const coursesById = new Map(courses?.map((course) => [course.id, course]) ?? []);
-
-  const workRows: WorkRow[] = (assignments ?? [])
-    .map((assignment) => {
-      const finalSubmission = finalByAssignment.get(assignment.id);
-      if (!finalSubmission) return null;
-      const module = modulesById.get(assignment.module_id);
-      const course = module ? coursesById.get(module.course_id) : null;
-      if (!module || !course) return null;
-      const status = assignmentStatus.get(assignment.id);
-      const critiqueRecord = critiqueBySubmission.get(finalSubmission.id);
-      const critiqueSummary = getCritiqueSummary({
-        hasCritique: status?.hasCritique ?? false,
-        submissionVersion: finalSubmission.version,
-        critiqueVersion: critiqueRecord?.submission_version ?? null,
-      });
-      const finalSummary = getFinalSubmissionSummary(finalSubmission.version);
-      return {
-        assignmentId: assignment.id,
-        assignmentTitle: assignment.title,
-        assignmentType: assignment.assignment_type,
-        moduleTitle: module.title,
-        modulePosition: module.position,
-        courseTitle: course.title ?? "Untitled course",
-        courseCode: course.code ?? null,
-        courseSequence: course.sequence_position ?? null,
-        finalSubmissionId: finalSubmission.id,
-        finalVersion: finalSubmission.version,
-        finalDate: finalSubmission.created_at,
-        finalLabel: finalSummary.label,
-        critiqueLabel: critiqueSummary.label,
-      };
-    })
-    .filter((row): row is WorkRow => Boolean(row));
-
-  workRows.sort((a, b) => {
+  workItems.sort((a, b) => {
     const seqA = a.courseSequence ?? 9999;
     const seqB = b.courseSequence ?? 9999;
     if (seqA !== seqB) return seqA - seqB;
-    const codeA = (a.courseCode ?? a.courseTitle).toLowerCase();
-    const codeB = (b.courseCode ?? b.courseTitle).toLowerCase();
-    if (codeA !== codeB) return codeA.localeCompare(codeB);
-    if (a.modulePosition !== b.modulePosition) {
-      return a.modulePosition - b.modulePosition;
-    }
+    if (a.modulePosition !== b.modulePosition) return a.modulePosition - b.modulePosition;
     return a.assignmentTitle.localeCompare(b.assignmentTitle);
   });
 
-  const recordDate = formatDate(new Date().toISOString());
+  // Group by course
+  const byCourse = new Map<string, WorkItem[]>();
+  workItems.forEach((item) => {
+    const key = item.courseCode ?? item.courseTitle;
+    const list = byCourse.get(key) ?? [];
+    list.push(item);
+    byCourse.set(key, list);
+  });
+
+  const finalCount = workItems.filter((w) => w.isFinal).length;
+  const draftCount = workItems.filter((w) => !w.isFinal && w.totalVersions > 0).length;
+  const critiquedCount = workItems.filter((w) => w.hasCritique).length;
 
   return (
-    <ReviewShell userEmail={user.email ?? null}>
-      <FormalDocumentLayout
-        backLink={{ href: `/programs/${program.id}/record`, label: "Academic record" }}
-        documentType="Academic Work Record"
-        title={program.title}
-        description="Formal register of finalized academic work and critique status."
-        recordDate={recordDate}
-      >
-        <DocumentSection title="Scope">
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm text-[var(--muted)] space-y-2">
-            <p>
-              This record lists finalized submissions only. Drafts and in-progress
-              work are excluded. Critique status is shown when a critique is attached
-              to the finalized version, but critique is not required for official
-              completion.
-            </p>
-          </div>
-        </DocumentSection>
+    <ProtectedShell userEmail={user.email ?? null}>
+      <div className="space-y-8">
 
-        <DocumentSection title="Final Work Archive">
-          {workRows.length ? (
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
-              <div className="grid gap-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)] md:grid-cols-[140px_1fr_1fr_140px_180px]">
-                <span>Course</span>
-                <span>Module</span>
-                <span>Assignment</span>
-                <span>Final date</span>
-                <span>Critique</span>
-              </div>
-              <div className="mt-3 space-y-3 text-sm text-[var(--muted)]">
-                {workRows.map((row) => (
-                  <div
-                    key={row.finalSubmissionId}
-                    className="grid gap-2 md:grid-cols-[140px_1fr_1fr_140px_180px]"
-                  >
-                    <span>{row.courseCode ?? "--"}</span>
-                    <span>
-                      {row.moduleTitle} (Module {row.modulePosition + 1})
-                    </span>
-                    <span>
-                      {row.assignmentTitle} - {row.assignmentType} - {row.finalLabel}
-                    </span>
-                    <span>{formatDate(row.finalDate)}</span>
-                    <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                      {row.critiqueLabel}
-                    </span>
-                    <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] md:col-span-5 no-print">
-                      <span className="flex flex-wrap gap-4">
-                        <Link href={`/submissions/${row.finalSubmissionId}/record`}>
-                          Final submission record
-                        </Link>
-                        <Link href={`/assignments/${row.assignmentId}`}>
-                          Assignment record
-                        </Link>
-                      </span>
-                    </span>
+        <header className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            <Link href="/dashboard">My Term</Link>
+            <span>/</span>
+            <Link href={`/programs/${program.id}/record`}>Record</Link>
+          </div>
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            {program.title}
+          </p>
+          <h1 className="text-3xl">Submission Archive</h1>
+          <div className="flex flex-wrap items-center gap-x-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            <span>{workItems.length} assignments</span>
+            <span>{finalCount} finalized</span>
+            <span>{draftCount} in draft</span>
+            <span>{critiquedCount} critiqued</span>
+          </div>
+        </header>
+
+        {Array.from(byCourse.entries()).map(([courseKey, items]) => (
+          <section key={courseKey} className="space-y-3">
+            <h2 className="text-lg">{items[0].courseCode ? `${items[0].courseCode} — ` : ""}{items[0].courseTitle}</h2>
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
+              {items.map((item) => (
+                <Link
+                  key={item.assignmentId}
+                  href={`/assignments/${item.assignmentId}`}
+                  className="flex flex-wrap items-center justify-between gap-4 px-5 py-3 transition hover:bg-[var(--surface-muted)]"
+                >
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-semibold">{item.assignmentTitle}</p>
+                    <p className="text-xs text-[var(--muted)]">
+                      {item.moduleTitle} · {item.assignmentType.replace(/_/g, " ")}
+                      {item.totalVersions > 0 ? ` · ${item.totalVersions} version${item.totalVersions === 1 ? "" : "s"}` : ""}
+                    </p>
                   </div>
-                ))}
-              </div>
-              <div className="mt-4 text-xs text-[var(--muted)]">
-                Only final submissions appear in this archive. Assignment records
-                retain full draft history and critique details.
-              </div>
+                  <div className="text-right shrink-0 space-y-0.5">
+                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                      {item.isFinal ? "Final" : item.totalVersions > 0 ? "Draft" : "Not submitted"}
+                    </p>
+                    {item.isFinal ? (
+                      <p className="text-xs text-[var(--muted)]">
+                        {formatDate(item.finalDate)}{item.hasCritique ? " · Critiqued" : ""}
+                      </p>
+                    ) : null}
+                  </div>
+                </Link>
+              ))}
             </div>
-          ) : (
-            <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)]">
-              No finalized academic work has been recorded yet.
-            </div>
-          )}
-        </DocumentSection>
-      </FormalDocumentLayout>
-    </ReviewShell>
+          </section>
+        ))}
+
+        {!workItems.length ? (
+          <p className="text-sm text-[var(--muted)]">No written work assigned yet.</p>
+        ) : null}
+      </div>
+    </ProtectedShell>
   );
 }
-
