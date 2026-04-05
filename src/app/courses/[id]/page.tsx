@@ -1,7 +1,6 @@
 ﻿import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { reorderModule } from "@/lib/actions";
 import {
   buildAssignmentStatusMap,
   getCourseStanding,
@@ -160,8 +159,6 @@ export default async function CoursePage({
       totalTasks: moduleStanding.completion.totalTasks,
       completedTasks: moduleStanding.completion.completedTasks,
       estimatedHours,
-      isFirst: index === 0,
-      isLast: index === (modules?.length ?? 0) - 1,
     };
   });
 
@@ -442,12 +439,6 @@ export default async function CoursePage({
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold">Course Profile</h2>
-                <Link
-                  href={`/courses/${course.id}/edit`}
-                  className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
-                >
-                  Edit
-                </Link>
               </div>
               <div className="grid gap-4 md:grid-cols-2 text-sm text-[var(--muted)]">
                 <div>
@@ -516,24 +507,16 @@ export default async function CoursePage({
               <h2 className="text-lg font-semibold">Requirement Blocks</h2>
               {requirementBlocks.length ? (
                 <ul className="space-y-2 text-sm text-[var(--muted)]">
-                  {requirementBlocks.map((block) => (
-                    <li key={block.id} className="flex flex-wrap items-center gap-3">
-                      <span>
-                        {block.title}
-                      </span>
-                      {block.category ? (
-                        <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                          {block.category}
+                    {requirementBlocks.map((block) => (
+                      <li key={block.id} className="flex flex-wrap items-center gap-3">
+                        <span>
+                          {block.title}
                         </span>
-                      ) : null}
-                      {course.program?.id ? (
-                        <Link
-                          href={`/programs/${course.program.id}/requirements/${block.id}/edit`}
-                          className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
-                        >
-                          Edit
-                        </Link>
-                      ) : null}
+                        {block.category ? (
+                          <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                            {block.category}
+                          </span>
+                        ) : null}
                     </li>
                   ))}
                 </ul>
@@ -567,30 +550,12 @@ export default async function CoursePage({
             </div>
           </div>
 
-          <div className="space-y-4">
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
-              <h2 className="text-lg font-semibold">Academic Links</h2>
-              <div className="flex flex-col gap-2 text-sm">
-                <Link href="/domains/new" className="text-[var(--muted)]">
-                  Create domain
-                </Link>
-                <Link href="/concepts/new" className="text-[var(--muted)]">
-                  Add concept
-                </Link>
-              </div>
-            </div>
-          </div>
+          <div className="space-y-4" />
         </section>
 
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold">Modules</h2>
-            <Link
-              href={`/modules/new?courseId=${course.id}`}
-              className="text-sm text-[var(--muted)]"
-            >
-              Add module
-            </Link>
           </div>
 
           {moduleSummaries.length ? (
@@ -623,30 +588,6 @@ export default async function CoursePage({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <form action={reorderModule}>
-                      <input type="hidden" name="moduleId" value={module.id} />
-                      <input type="hidden" name="direction" value="up" />
-                      <button
-                        type="submit"
-                        disabled={module.isFirst}
-                        className="rounded-md border border-[var(--border)] px-3 py-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)] disabled:opacity-40"
-                      >
-                        Up
-                      </button>
-                    </form>
-                    <form action={reorderModule}>
-                      <input type="hidden" name="moduleId" value={module.id} />
-                      <input type="hidden" name="direction" value="down" />
-                      <button
-                        type="submit"
-                        disabled={module.isLast}
-                        className="rounded-md border border-[var(--border)] px-3 py-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)] disabled:opacity-40"
-                      >
-                        Down
-                      </button>
-                    </form>
-                  </div>
                 </div>
               ))}
             </div>

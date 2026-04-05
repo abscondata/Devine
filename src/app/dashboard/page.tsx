@@ -361,29 +361,6 @@ export default async function DashboardPage() {
         </header>
 
         <section className="space-y-4">
-          <h2 className="text-xl font-semibold">Quick Create</h2>
-          <div className="grid gap-3 md:grid-cols-3">
-            {[
-              { href: "/programs/new", label: "Program" },
-              { href: "/domains/new", label: "Domain" },
-              { href: "/courses/new", label: "Course" },
-              { href: "/modules/new", label: "Module" },
-              { href: "/assignments/new", label: "Assignment" },
-              { href: "/readings/new", label: "Reading" },
-              { href: "/concepts/new", label: "Concept" },
-            ].map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--muted)] hover:border-[var(--accent-soft)]"
-              >
-                Create {item.label}
-              </Link>
-            ))}
-          </div>
-        </section>
-
-        <section className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold">Foundations Phase</h2>
             <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">

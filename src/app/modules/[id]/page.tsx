@@ -111,12 +111,6 @@ export default async function ModulePage({
                 {module.overview ?? "No module overview yet."}
               </p>
             </div>
-            <Link
-              href={`/modules/${module.id}/edit`}
-              className="text-sm text-[var(--muted)]"
-            >
-              Edit module
-            </Link>
           </div>
           <div className="flex flex-wrap gap-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
             <span>
@@ -192,12 +186,6 @@ export default async function ModulePage({
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold">Readings</h2>
-            <Link
-              href={`/readings/new?moduleId=${module.id}`}
-              className="text-sm text-[var(--muted)]"
-            >
-              Add reading
-            </Link>
           </div>
 
           {readings?.length ? (
@@ -230,12 +218,6 @@ export default async function ModulePage({
                       </div>
                       <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                         <span>Status {reading.status.replace(/_/g, " ")}</span>
-                        <Link
-                          href={`/readings/${reading.id}/edit`}
-                          className="text-[var(--muted)]"
-                        >
-                          Edit
-                        </Link>
                       </div>
                   </div>
                   {isReadingSkipped(reading.status) ? (
@@ -294,12 +276,6 @@ export default async function ModulePage({
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold">Assignments</h2>
-            <Link
-              href={`/assignments/new?moduleId=${module.id}`}
-              className="text-sm text-[var(--muted)]"
-            >
-              Add assignment
-            </Link>
           </div>
 
           {assignments?.length ? (

@@ -141,12 +141,6 @@ export default async function AssignmentPage({
                 <span>{assignment.due_at ? formatDate(assignment.due_at) : "No deadline"}</span>
               </div>
             </div>
-            <Link
-              href={`/assignments/${assignment.id}/edit`}
-              className="text-sm text-[var(--muted)]"
-            >
-              Edit assignment
-            </Link>
           </div>
         </header>
 

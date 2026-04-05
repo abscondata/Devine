@@ -27,19 +27,13 @@ export default async function ProgramsPage() {
           </p>
           <h1 className="text-3xl font-semibold">Programs</h1>
           <p className="text-sm text-[var(--muted)]">
-            Manage program structures and audit requirements.
+            Program standing, constitutional requirements, and formal records.
           </p>
         </header>
 
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold">All Programs</h2>
-            <Link
-              href="/programs/new"
-              className="text-sm text-[var(--muted)]"
-            >
-              New program
-            </Link>
           </div>
 
           {programs?.length ? (
@@ -60,13 +54,25 @@ export default async function ProgramsPage() {
                   </div>
                   <div className="flex flex-wrap gap-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                     <Link href={`/programs/${program.id}/audit`}>
-                      Audit requirements
+                      Program standing
                     </Link>
                     <Link href={`/programs/${program.id}/record`}>
                       Academic record
                     </Link>
-                    <Link href={`/programs/${program.id}/requirements/new`}>
-                      Add requirement block
+                    <Link href={`/programs/${program.id}/charter`}>
+                      Program charter
+                    </Link>
+                    <Link href={`/programs/${program.id}/work`}>
+                      Work record
+                    </Link>
+                    <Link href={`/programs/${program.id}/research`}>
+                      Research register
+                    </Link>
+                    <Link href={`/programs/${program.id}/chronology`}>
+                      Chronology
+                    </Link>
+                    <Link href={`/programs/${program.id}/review`}>
+                      Review packet
                     </Link>
                   </div>
                 </div>
@@ -79,19 +85,6 @@ export default async function ProgramsPage() {
           )}
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold">Administration</h2>
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm text-[var(--muted)] space-y-2">
-            <p>
-              Institutional governance tools for thesis administration and review
-              access.
-            </p>
-            <div className="flex flex-wrap gap-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              <Link href="/admin/thesis">Thesis governance</Link>
-              <Link href="/admin/review-links">Review access</Link>
-            </div>
-          </div>
-        </section>
       </div>
     </ProtectedShell>
   );

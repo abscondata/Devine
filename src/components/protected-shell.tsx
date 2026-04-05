@@ -1,30 +1,70 @@
 ﻿import Link from "next/link";
 import { signOut } from "@/lib/actions";
+import { createClient } from "@/lib/supabase/server";
 
-export function ProtectedShell({
+export async function ProtectedShell({
   userEmail,
   children,
 }: {
   userEmail: string | null;
   children: React.ReactNode;
 }) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { data: programs } = user
+    ? await supabase
+        .from("programs")
+        .select("id")
+        .order("created_at", { ascending: true })
+        .limit(1)
+    : { data: [] as { id: string }[] };
+
+  const programId = programs?.[0]?.id ?? null;
+  const recordHref = programId ? `/programs/${programId}/record` : "/programs";
+  const workHref = programId ? `/programs/${programId}/work` : "/programs";
+  const researchHref = programId
+    ? `/programs/${programId}/research`
+    : "/programs";
+  const reviewHref = programId ? `/programs/${programId}/review` : "/programs";
+
   return (
     <div className="min-h-screen">
       <header className="border-b border-[var(--border)] bg-[var(--surface)]">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-          <div className="flex items-center gap-6">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-5">
+          <div className="flex flex-col gap-3">
             <Link href="/dashboard" className="text-sm font-semibold">
               Devine
             </Link>
-            <nav className="flex items-center gap-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            <nav className="flex flex-wrap items-center gap-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
               <Link href="/dashboard" className="hover:text-[var(--text)]">
-                Dashboard
+                College
               </Link>
               <Link href="/programs" className="hover:text-[var(--text)]">
-                Programs
+                Program
               </Link>
-              <Link href="/programs/new" className="hover:text-[var(--text)]">
-                Create
+              <Link href="/courses" className="hover:text-[var(--text)]">
+                Courses
+              </Link>
+              <Link href="/readings" className="hover:text-[var(--text)]">
+                Readings
+              </Link>
+              <Link href="/assignments" className="hover:text-[var(--text)]">
+                Assignments
+              </Link>
+              <Link href={recordHref} className="hover:text-[var(--text)]">
+                Academic Record
+              </Link>
+              <Link href={workHref} className="hover:text-[var(--text)]">
+                Work Record
+              </Link>
+              <Link href={researchHref} className="hover:text-[var(--text)]">
+                Research
+              </Link>
+              <Link href={reviewHref} className="hover:text-[var(--text)]">
+                Review Packet
               </Link>
             </nav>
           </div>
