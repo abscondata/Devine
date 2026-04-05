@@ -369,43 +369,67 @@ export default async function CoursePage({
           <h2 className="text-xl">Course of Study</h2>
 
           {moduleSummaries.length ? (
-            <div className="space-y-3">
-              {moduleSummaries.map((module) => (
-                <Link
-                  key={module.id}
-                  href={`/modules/${module.id}`}
-                  className="block rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 transition hover:border-[var(--accent-soft)]"
-                >
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                        Unit {module.position + 1}{module.position + 1 === moduleSummaries.length ? " · Final unit" : ""}
-                      </p>
-                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                        {module.completedTasks === module.totalTasks && module.totalTasks > 0
-                          ? "Complete"
-                          : module.completedTasks > 0
-                          ? `${module.completedTasks} of ${module.totalTasks} fulfilled`
-                          : `${module.totalTasks} requirements`}
-                      </p>
-                    </div>
-                    <h3 className="text-lg font-semibold">{module.title}</h3>
-                    <p className="text-sm text-[var(--muted)]">
-                      {module.overview ?? ""}
-                    </p>
-                    {module.estimatedHours ? (
-                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                        Estimated reading: {module.estimatedHours.toFixed(1)} hours
-                      </p>
+            <div className="space-y-6">
+              {moduleSummaries.map((module) => {
+                const unitReadings = readingsByModule.get(module.id) ?? [];
+                const unitAssignments = assignmentsByModule.get(module.id) ?? [];
+                const isComplete = module.completedTasks === module.totalTasks && module.totalTasks > 0;
+
+                return (
+                  <div key={module.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
+                    <Link
+                      href={`/modules/${module.id}`}
+                      className="block p-5 transition hover:bg-[var(--surface-muted)]"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                          Unit {module.position + 1}{module.position + 1 === moduleSummaries.length ? " · Final unit" : ""}
+                        </p>
+                        <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                          {isComplete ? "Complete" : `${module.completedTasks} of ${module.totalTasks} fulfilled`}
+                        </p>
+                      </div>
+                      <h3 className="mt-2 text-lg font-semibold">{module.title}</h3>
+                      {module.overview ? (
+                        <p className="mt-1 text-sm text-[var(--muted)]">{module.overview}</p>
+                      ) : null}
+                    </Link>
+
+                    {/* Inline syllabus: readings + written work for this unit */}
+                    {(unitReadings.length > 0 || unitAssignments.length > 0) ? (
+                      <div className="border-t border-[var(--border)] px-5 py-4 space-y-3">
+                        {unitReadings.length > 0 ? (
+                          <div className="space-y-1">
+                            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Readings</p>
+                            <ol className="space-y-0.5 text-sm text-[var(--muted)]">
+                              {(unitReadings as { id?: string; title?: string | null; position?: number }[])
+                                .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+                                .map((r, i) => (
+                                  <li key={r.id ?? i}>{r.title}</li>
+                                ))}
+                            </ol>
+                          </div>
+                        ) : null}
+                        {unitAssignments.length > 0 ? (
+                          <div className="space-y-1">
+                            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Written work</p>
+                            <ol className="space-y-0.5 text-sm text-[var(--muted)]">
+                              {(unitAssignments as { id?: string; title?: string | null }[]).map((a, i) => (
+                                <li key={a.id ?? i}>{a.title}</li>
+                              ))}
+                            </ol>
+                          </div>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
-                </Link>
-              ))}
+                );
+              })}
             </div>
           ) : (
-            <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)]">
+            <p className="text-sm text-[var(--muted)]">
               No units of study have been established for this course.
-            </div>
+            </p>
           )}
         </section>
 
