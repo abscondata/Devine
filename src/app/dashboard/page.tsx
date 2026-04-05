@@ -327,95 +327,95 @@ export default async function DashboardPage() {
     };
   });
 
-  // ─── Canonical truth derivation ───
-  // All page state derives from these. No section may contradict another.
+  // ═══════════════════════════════════════════════════════════════════
+  // CANONICAL TRUTH DERIVATION
+  // Every display field on College Home derives from this block.
+  // No zone may contradict another because they share these outputs.
+  // ═══════════════════════════════════════════════════════════════════
 
-  // 1. Filter modules to prerequisite-valid courses only.
-  //    A course is valid for "current study" only if its readiness is
-  //    "ready" (prerequisites met) or "completed". This prevents showing
-  //    an advanced course as active while its prerequisites are pending.
+  // 1. CURRENT COURSE: only prerequisite-valid courses are eligible.
   const validCourseIds = new Set(
     courseIds.filter((id) => {
       const r = readinessByCourse.get(id);
       return r?.status === "ready" || r?.status === "completed";
     })
   );
-  const validModuleProgress = moduleProgress.filter(
-    (m) => validCourseIds.has(m.course_id)
-  );
-
-  // 2. Select current module from valid courses only.
   const currentWork = getCurrentWorkSelection({
-    moduleProgress: validModuleProgress,
+    moduleProgress: moduleProgress.filter((m) => validCourseIds.has(m.course_id)),
     coursesById,
     readingsByModule,
     assignmentsByModule,
     assignmentStatus,
     finalAssignmentIds: finalSet,
   });
-  const currentModule = currentWork.currentModule;
-  const currentReadings = currentWork.currentReadings;
-  const currentAssignments = currentWork.currentAssignments;
-  const nextAction = currentWork.nextAction;
-
-  // 3. Derive active course from the valid current module.
-  const activeCourse = currentModule
-    ? courseSummaries.find((c) => c.id === currentModule.course_id) ?? null
+  const currentUnit = currentWork.currentModule;
+  const activeCourse = currentUnit
+    ? courseSummaries.find((c) => c.id === currentUnit.course_id) ?? null
     : null;
-  const activeCourseTotalUnits = activeCourse
-    ? moduleProgress.filter((m) => m.course_id === activeCourse.id).length
-    : 0;
 
-  // 4. Credit computations from the same courseSummaries/transcript source.
+  // 2. COUNTS: if activeCourse exists it MUST count as in-progress,
+  //    even if getTranscriptLiteSummary classified it as "not started"
+  //    (which happens when completedTasks === 0).
+  const activeCourseIsInProgress = activeCourse && !activeCourse.isComplete;
+  const canonicalInProgressIds = new Set(inProgressCourseIds);
+  if (activeCourseIsInProgress) canonicalInProgressIds.add(activeCourse.id);
+  const canonicalInProgressCount = canonicalInProgressIds.size;
   const creditsEarned = completedCourses.reduce(
     (sum, c) => sum + (c.credits_or_weight ?? 0), 0
   );
-  const creditsInProgress = inProgressCourses.reduce(
-    (sum, c) => sum + (c.credits_or_weight ?? 0), 0
-  );
+  const creditsInProgress = courseSummaries
+    .filter((c) => canonicalInProgressIds.has(c.id))
+    .reduce((sum, c) => sum + (c.credits_or_weight ?? 0), 0);
   const totalCreditsRequired = (requirementBlocks ?? []).reduce(
     (sum, b) => sum + (b.minimum_credits_required ?? 0), 0
   );
-  const totalFinalSubmissions = finalSubmissions.length;
 
-  // 5. Current unit reading hours (from raw readings, not ReadingLike type).
-  const currentUnitHours = currentModule
+  // 3. CURRENT UNIT detail.
+  const activeCourseTotalUnits = activeCourse
+    ? moduleProgress.filter((m) => m.course_id === activeCourse.id).length
+    : 0;
+  const currentUnitReadings = currentWork.currentReadings;
+  const currentUnitWrittenWork = currentWork.currentAssignments;
+  const currentUnitHours = currentUnit
     ? (readings ?? [])
-        .filter((r) => r.module_id === currentModule.id)
+        .filter((r) => r.module_id === currentUnit.id)
         .reduce((sum, r) => sum + (r.estimated_hours ?? 0), 0)
     : 0;
-
-  // 6. Current unit standing (for blocker display).
-  const currentUnitStanding = currentModule
+  const currentUnitStanding = currentUnit
     ? getModuleStanding({
-        readings: (readingsByModule.get(currentModule.id) ?? []) as Parameters<typeof getModuleStanding>[0]["readings"],
-        assignments: (assignmentsByModule.get(currentModule.id) ?? []) as Parameters<typeof getModuleStanding>[0]["assignments"],
+        readings: (readingsByModule.get(currentUnit.id) ?? []) as Parameters<typeof getModuleStanding>[0]["readings"],
+        assignments: (assignmentsByModule.get(currentUnit.id) ?? []) as Parameters<typeof getModuleStanding>[0]["assignments"],
         assignmentStatus,
       })
     : null;
+  const nextAction = currentWork.nextAction;
 
-  // 7. Academic standing — single derivation used in identity strip.
+  // 4. LATER WORK in current course (units after the current one).
+  const laterCourseWork = activeCourse && currentUnit
+    ? (assignments ?? []).filter((a) => {
+        if (finalSet.has(a.id)) return false;
+        if (assignmentToCourse.get(a.id) !== activeCourse.id) return false;
+        const mod = moduleToCourse.get(a.module_id) === activeCourse.id
+          ? modules?.find((m) => m.id === a.module_id)
+          : null;
+        return mod ? mod.position > currentUnit.position : false;
+      })
+    : [];
+
+  // 5. IDENTITY FIELDS — enrollment and standing are separate concepts.
   const allBlocksSatisfied = blockSummaries.every((s) => s.satisfied);
+  const enrollmentStatus = programSummaries.length ? "Enrolled" : "No program";
   const academicStanding = allBlocksSatisfied
     ? "Program complete"
-    : completedCourses.length > 0 || inProgressCourses.length > 0
+    : activeCourse || completedCourses.length > 0
     ? "In good standing"
-    : "Enrolled";
-
-  // 8. Current course open written work (scoped to active course only).
-  const currentCourseOpenWork = activeCourse
-    ? (assignments ?? []).filter(
-        (a) =>
-          !finalSet.has(a.id) &&
-          assignmentToCourse.get(a.id) === activeCourse.id
-      )
-    : [];
+    : "Not yet begun";
 
   return (
     <ProtectedShell userEmail={user.email ?? null}>
       <div className="space-y-10">
 
-        {/* ═══ ZONE A: Academic Identity ═══ */}
+        {/* ═══ A. ACADEMIC IDENTITY ═══ */}
         <header className="space-y-4">
           <div className="space-y-1">
             <h1 className="text-3xl">College Home</h1>
@@ -425,22 +425,21 @@ export default async function DashboardPage() {
           </div>
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
             <div className="flex flex-wrap gap-x-8 gap-y-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+              <span>Enrollment: {enrollmentStatus}</span>
               <span>Standing: {academicStanding}</span>
               <span>Credits earned: {creditsEarned}{totalCreditsRequired ? ` of ${totalCreditsRequired}` : ""}</span>
-              {creditsInProgress > 0 ? <span>In progress: {creditsInProgress} cr</span> : null}
-              <span>Courses: {completedCourses.length} complete, {inProgressCourses.length} in progress</span>
-              <span>Final submissions: {totalFinalSubmissions}</span>
+              {creditsInProgress > 0 ? <span>Credits in progress: {creditsInProgress}</span> : null}
+              <span>Courses: {completedCourses.length} complete, {canonicalInProgressCount} in progress</span>
+              <span>Final submissions: {finalSubmissions.length}</span>
             </div>
           </div>
         </header>
 
-        {/* ═══ ZONE B: Current Study ═══ */}
-        {activeCourse && currentModule ? (
+        {/* ═══ B. CURRENT COURSE ═══ */}
+        {activeCourse && currentUnit ? (
           <section className="space-y-4">
             <h2 className="text-2xl">Current Course</h2>
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 space-y-5">
-
-              {/* Course identity */}
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 space-y-4">
               <div className="flex flex-wrap items-start justify-between gap-6">
                 <div className="space-y-1">
                   <Link href={`/courses/${activeCourse.id}`}>
@@ -454,98 +453,22 @@ export default async function DashboardPage() {
                   {activeCourse.credits_or_weight ? <p>{activeCourse.credits_or_weight} credits</p> : null}
                 </div>
               </div>
-
-              {/* Course standing */}
               <div className="flex flex-wrap gap-x-8 gap-y-1 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                 <span>{activeCourse.completedTasks} of {activeCourse.totalTasks} course requirements fulfilled</span>
                 <span>{activeCourse.finalAssignments} of {activeCourse.totalAssignments} final submissions</span>
-                {activeCourse.unreadReadings > 0 ? (
-                  <span>{activeCourse.unreadReadings} reading{activeCourse.unreadReadings === 1 ? "" : "s"} remaining</span>
-                ) : null}
               </div>
-
-              {/* Current unit */}
-              <Link
-                href={`/modules/${currentModule.id}`}
-                className="block rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-5 space-y-3 transition hover:border-[var(--accent-soft)]"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                    Current unit{activeCourseTotalUnits ? ` · ${currentModule.position + 1} of ${activeCourseTotalUnits}` : ""}
-                  </p>
-                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Continue study</p>
-                </div>
-                <h4 className="text-lg font-semibold text-[var(--text)]">{currentModule.title}</h4>
-                <div className="flex flex-wrap gap-x-8 gap-y-1 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                  <span>{currentModule.completedTasks} of {currentModule.totalTasks} unit requirements fulfilled</span>
-                  {currentUnitHours ? <span>Estimated reading: {currentUnitHours.toFixed(1)}h</span> : null}
-                </div>
-                {currentUnitStanding && currentUnitStanding.completion.unreadReadings > 0 ? (
-                  <p className="text-xs text-[var(--muted)]">Unread readings block unit completion.</p>
-                ) : null}
-              </Link>
-
-              {/* Unit detail: readings + written work */}
-              {(currentReadings.length > 0 || currentAssignments.length > 0) ? (
-                <div className="grid gap-5 md:grid-cols-2">
-                  {currentReadings.length > 0 ? (
-                    <div className="space-y-2">
-                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Readings</p>
-                      <ul className="space-y-1 text-sm text-[var(--muted)]">
-                        {currentReadings.map((r) => <li key={r.id}>{r.title}</li>)}
-                      </ul>
-                    </div>
-                  ) : null}
-                  {currentAssignments.length > 0 ? (
-                    <div className="space-y-2">
-                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Written work</p>
-                      <ul className="space-y-1 text-sm text-[var(--muted)]">
-                        {currentAssignments.map((a) => <li key={a.id}>{a.title}</li>)}
-                      </ul>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {/* Next obligation */}
-              {nextAction ? (
-                <div className="border-t border-[var(--border)] pt-4 space-y-1">
-                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Next obligation</p>
-                  <p className="text-sm font-semibold text-[var(--text)]">{nextAction.title}</p>
-                  <p className="text-sm text-[var(--muted)]">{nextAction.reason}</p>
-                </div>
-              ) : null}
             </div>
-
-            {/* Current course written work */}
-            {currentCourseOpenWork.length > 0 ? (
-              <div className="space-y-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Outstanding written work · {activeCourse.code}
-                </p>
-                <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
-                  {currentCourseOpenWork.map((a) => (
-                    <Link key={a.id} href={`/assignments/${a.id}`} className="flex flex-wrap items-center justify-between gap-4 px-5 py-3 transition hover:bg-[var(--surface-muted)]">
-                      <p className="text-sm font-semibold">{a.title}</p>
-                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">{a.assignment_type?.replace(/_/g, " ") ?? ""}</p>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            ) : null}
           </section>
         ) : (
           <section className="space-y-4">
             <h2 className="text-2xl">Current Course</h2>
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 space-y-3">
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
               {completedCourses.length > 0 && !recommendedNext ? (
                 <p className="text-sm font-semibold text-[var(--text)]">All coursework complete.</p>
               ) : recommendedNext ? (
-                <>
+                <div className="space-y-3">
                   <p className="text-sm text-[var(--muted)]">
-                    {completedCourses.length > 0
-                      ? "Current coursework is complete."
-                      : "No course is currently in progress."}
+                    {completedCourses.length > 0 ? "Current coursework is complete." : "No course is currently in progress."}
                   </p>
                   <Link href={`/courses/${recommendedNext.id}`} className="block rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4 transition hover:border-[var(--accent-soft)]">
                     <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Ready to begin</p>
@@ -553,7 +476,7 @@ export default async function DashboardPage() {
                       {recommendedNext.code ? `${recommendedNext.code} — ` : ""}{recommendedNext.title}
                     </p>
                   </Link>
-                </>
+                </div>
               ) : (
                 <p className="text-sm text-[var(--muted)]">No course is currently in progress.</p>
               )}
@@ -561,17 +484,87 @@ export default async function DashboardPage() {
           </section>
         )}
 
-        {/* ═══ ZONE C: Institutional Standing ═══ */}
-        <section className="space-y-6">
-          <h2 className="text-xl">Institutional Standing</h2>
+        {/* ═══ C. CURRENT UNIT ═══ */}
+        {activeCourse && currentUnit ? (
+          <section className="space-y-4">
+            <h2 className="text-xl">Current Unit</h2>
+            <Link
+              href={`/modules/${currentUnit.id}`}
+              className="block rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 space-y-3 transition hover:border-[var(--accent-soft)]"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Unit {currentUnit.position + 1} of {activeCourseTotalUnits} · {activeCourse.code}
+                </p>
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Continue study</p>
+              </div>
+              <h3 className="text-lg font-semibold">{currentUnit.title}</h3>
+              <div className="flex flex-wrap gap-x-8 gap-y-1 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                <span>{currentUnit.completedTasks} of {currentUnit.totalTasks} unit requirements fulfilled</span>
+                {currentUnitHours ? <span>Estimated reading: {currentUnitHours.toFixed(1)}h</span> : null}
+              </div>
+              {currentUnitStanding && currentUnitStanding.completion.unreadReadings > 0 ? (
+                <p className="text-xs text-[var(--muted)]">Unread readings block unit completion.</p>
+              ) : null}
+            </Link>
+          </section>
+        ) : null}
 
-          {/* Academic record summary */}
+        {/* ═══ D. CURRENT REQUIRED WORK ═══ */}
+        {(currentUnitReadings.length > 0 || currentUnitWrittenWork.length > 0) ? (
+          <section className="space-y-4">
+            <h2 className="text-xl">Current Required Work</h2>
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+              Unit {currentUnit!.position + 1}: {currentUnit!.title}
+            </p>
+            <div className="grid gap-5 md:grid-cols-2">
+              {currentUnitReadings.length > 0 ? (
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-2">
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                    Readings · {currentUnitReadings.length} unread
+                  </p>
+                  <ul className="space-y-1 text-sm text-[var(--muted)]">
+                    {currentUnitReadings.map((r) => <li key={r.id}>{r.title}</li>)}
+                  </ul>
+                </div>
+              ) : null}
+              {currentUnitWrittenWork.length > 0 ? (
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-2">
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                    Written work · {currentUnitWrittenWork.length} outstanding
+                  </p>
+                  <ul className="space-y-1 text-sm text-[var(--muted)]">
+                    {currentUnitWrittenWork.map((a) => <li key={a.id}>{a.title}</li>)}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+            {nextAction ? (
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-1">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Next obligation</p>
+                <p className="text-sm font-semibold text-[var(--text)]">{nextAction.title}</p>
+                <p className="text-sm text-[var(--muted)]">{nextAction.reason}</p>
+              </div>
+            ) : null}
+            {laterCourseWork.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Later in this course · {laterCourseWork.length} written work remaining
+                </p>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
+        {/* ═══ E. INSTITUTIONAL STANDING ═══ */}
+        <section className="space-y-5">
+          <h2 className="text-xl">Institutional Standing</h2>
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Academic record</p>
             <div className="flex flex-wrap gap-x-8 gap-y-1 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
               <span>Courses completed: {completedCourses.length}</span>
               <span>Credits earned: {creditsEarned}</span>
-              <span>In progress: {inProgressCourses.length} courses, {creditsInProgress} cr</span>
+              <span>In progress: {canonicalInProgressCount} course{canonicalInProgressCount === 1 ? "" : "s"}, {creditsInProgress} cr</span>
             </div>
             {completedCourses.length ? (
               <ul className="space-y-1 text-sm text-[var(--muted)]">
@@ -590,8 +583,6 @@ export default async function DashboardPage() {
               </div>
             ) : null}
           </div>
-
-          {/* Program audit summary */}
           {programSummaries.length ? (
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-4">
@@ -604,28 +595,25 @@ export default async function DashboardPage() {
                 const nextIncomplete = blockSummaries.find((s) => !s.satisfied);
                 return nextIncomplete ? (
                   <p className="text-sm text-[var(--muted)]">
-                    Next incomplete: <span className="font-semibold text-[var(--text)]">{nextIncomplete.block.title}</span>
-                    {" "}({nextIncomplete.status})
+                    Next incomplete: <span className="font-semibold text-[var(--text)]">{nextIncomplete.block.title}</span> ({nextIncomplete.status})
                   </p>
                 ) : (
                   <p className="text-sm font-semibold text-[var(--text)]">All requirement blocks satisfied.</p>
                 );
               })()}
               {programSummaries[0].id ? (
-                <Link href={`/programs/${programSummaries[0].id}/audit`} className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] hover:text-[var(--text)]">
-                  Full program audit
-                </Link>
+                <Link href={`/programs/${programSummaries[0].id}/audit`} className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] hover:text-[var(--text)]">Full program audit</Link>
               ) : null}
             </div>
           ) : null}
         </section>
 
-        {/* ═══ ZONE D: Forward Sequence ═══ */}
+        {/* ═══ F. FORWARD SEQUENCE ═══ */}
         <section className="space-y-4">
           <h2 className="text-xl">Curriculum Sequence</h2>
           <p className="text-sm text-[var(--muted)]">
-            The foundations sequence establishes method and content for the
-            entire curriculum. Courses unlock as prerequisites are completed.
+            Courses unlock as prerequisites are completed. The foundations sequence
+            establishes method and content for the entire curriculum.
           </p>
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
             {foundationCourses.map((course) => {
