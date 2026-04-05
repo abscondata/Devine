@@ -38,12 +38,12 @@ export async function ProtectedShell({
             <Link href="/dashboard" className="font-serif text-lg tracking-tight">
               Devine College
             </Link>
-            <div className="flex items-center gap-4 text-sm text-[var(--muted)]">
-              <span>{userEmail}</span>
+            <div className="flex items-center gap-4">
+              <span className="text-xs text-[var(--muted)]">{userEmail}</span>
               <form action={signOut}>
                 <button
                   type="submit"
-                  className="rounded-md border border-[var(--border)] px-3 py-1 text-xs uppercase tracking-[0.2em]"
+                  className="rounded-md border border-[var(--border)] px-3 py-1 text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
                 >
                   Sign Out
                 </button>
@@ -74,7 +74,7 @@ export async function ProtectedShell({
                 Record
               </Link>
               <Link href={workHref} className="hover:text-[var(--text)] hover:opacity-100">
-                Work
+                Submissions
               </Link>
               <Link href={researchHref} className="hover:text-[var(--text)] hover:opacity-100">
                 Research
