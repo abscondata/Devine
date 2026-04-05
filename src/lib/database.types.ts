@@ -9,6 +9,49 @@
 export interface Database {
   public: {
     Tables: {
+      academic_terms: {
+        Row: {
+          id: string;
+          program_id: string;
+          title: string;
+          starts_at: string | null;
+          ends_at: string | null;
+          is_current: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          program_id: string;
+          title: string;
+          starts_at?: string | null;
+          ends_at?: string | null;
+          is_current?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          program_id?: string;
+          title?: string;
+          starts_at?: string | null;
+          ends_at?: string | null;
+          is_current?: boolean;
+        };
+        Relationships: [];
+      };
+      term_courses: {
+        Row: {
+          term_id: string;
+          course_id: string;
+        };
+        Insert: {
+          term_id: string;
+          course_id: string;
+        };
+        Update: {
+          term_id?: string;
+          course_id?: string;
+        };
+        Relationships: [];
+      };
       programs: {
         Row: {
           id: string;

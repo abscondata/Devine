@@ -75,6 +75,32 @@ where current_course_id is null
   and role = 'owner'
   and program_id = (select id from programs where title = 'Devine College Core' limit 1);
 
+-- Seed initial academic term with PHIL 501 and HIST 520.
+insert into academic_terms (program_id, title, starts_at, ends_at, is_current)
+select
+  p.id,
+  'Term 1',
+  current_date,
+  current_date + interval '16 weeks',
+  true
+from programs p
+where p.title = 'Devine College Core'
+  and not exists (
+    select 1 from academic_terms at where at.program_id = p.id
+  );
+
+insert into term_courses (term_id, course_id)
+select at.id, c.id
+from academic_terms at
+join programs p on p.id = at.program_id
+join courses c on c.program_id = p.id
+where p.title = 'Devine College Core'
+  and at.is_current = true
+  and c.code in ('PHIL 501', 'HIST 520')
+  and not exists (
+    select 1 from term_courses tc where tc.term_id = at.id and tc.course_id = c.id
+  );
+
 -- Ensure requirement block ordering remains unique before inserting new blocks
 update requirement_blocks
 set position = 7

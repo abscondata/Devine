@@ -54,6 +54,26 @@ create index if not exists idx_program_members_user on program_members(user_id);
 -- NULL means infer from sequence position (backward-compatible).
 alter table program_members add column if not exists current_course_id uuid references courses(id) on delete set null;
 
+-- Academic terms: the student's current period of study.
+create table if not exists academic_terms (
+  id uuid primary key default gen_random_uuid(),
+  program_id uuid not null references programs(id) on delete cascade,
+  title text not null,
+  starts_at date,
+  ends_at date,
+  is_current boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_academic_terms_program on academic_terms(program_id);
+
+-- Term course assignments: which courses are in a given term.
+create table if not exists term_courses (
+  term_id uuid not null references academic_terms(id) on delete cascade,
+  course_id uuid not null references courses(id) on delete cascade,
+  primary key (term_id, course_id)
+);
+
 -- Academic domains (top-level divisions)
 create table if not exists domains (
   id uuid primary key default gen_random_uuid(),
