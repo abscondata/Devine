@@ -364,7 +364,7 @@ export default async function CoursePage({
         </section>
 
         <section className="space-y-4">
-          <h2 className="text-xl">Course of Study</h2>
+          <h2 className="text-xl">Syllabus</h2>
 
           {moduleSummaries.length ? (
             <div className="space-y-6">
@@ -433,20 +433,22 @@ export default async function CoursePage({
           )}
         </section>
 
-        {course.syllabus ? (
+        {(course.syllabus || course.learning_outcomes) ? (
           <section className="space-y-3">
-            <h2 className="text-xl">Syllabus</h2>
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
-              <p className="text-sm text-[var(--muted)] whitespace-pre-wrap">{course.syllabus}</p>
-            </div>
-          </section>
-        ) : null}
-
-        {course.learning_outcomes ? (
-          <section className="space-y-3">
-            <h2 className="text-xl">Learning Outcomes</h2>
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
-              <p className="text-sm text-[var(--muted)] whitespace-pre-wrap">{course.learning_outcomes}</p>
+            <h2 className="text-xl">Course Description</h2>
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-4">
+              {course.syllabus ? (
+                <div className="space-y-1">
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Syllabus overview</p>
+                  <p className="text-sm text-[var(--muted)] whitespace-pre-wrap">{course.syllabus}</p>
+                </div>
+              ) : null}
+              {course.learning_outcomes ? (
+                <div className="space-y-1">
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Learning outcomes</p>
+                  <p className="text-sm text-[var(--muted)] whitespace-pre-wrap">{course.learning_outcomes}</p>
+                </div>
+              ) : null}
             </div>
           </section>
         ) : null}

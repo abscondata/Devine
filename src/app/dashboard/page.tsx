@@ -354,11 +354,11 @@ export default async function DashboardPage() {
           </p>
           {currentTerm ? (
             <div className="mt-1 flex flex-wrap items-baseline gap-x-6 gap-y-1">
-              <h1 className="text-3xl">{currentTerm.title}</h1>
+              <Link href="/term"><h1 className="text-3xl">{currentTerm.title}</h1></Link>
               <div className="flex flex-wrap gap-x-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                 {schedule ? <span>Week {schedule.currentWeek} of {schedule.totalWeeks}</span> : null}
                 <span>{termCourseSummaries.length} course{termCourseSummaries.length === 1 ? "" : "s"}</span>
-                {currentTerm.ends_at ? <span>Ends {formatScheduleDate(new Date(currentTerm.ends_at))}</span> : null}
+                <Link href="/term" className="hover:text-[var(--text)]">Full term view</Link>
               </div>
             </div>
           ) : (
