@@ -41,18 +41,21 @@ export interface Database {
           program_id: string;
           user_id: string;
           role: "owner" | "admin" | "staff" | "member";
+          current_course_id: string | null;
           created_at: string;
         };
         Insert: {
           program_id: string;
           user_id: string;
           role?: "owner" | "admin" | "staff" | "member";
+          current_course_id?: string | null;
           created_at?: string;
         };
         Update: {
           program_id?: string;
           user_id?: string;
           role?: "owner" | "admin" | "staff" | "member";
+          current_course_id?: string | null;
           created_at?: string;
         };
         Relationships: [];

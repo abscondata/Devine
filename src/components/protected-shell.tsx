@@ -3,32 +3,52 @@ import { signOut } from "@/lib/actions";
 import { createClient } from "@/lib/supabase/server";
 
 /**
- * Resolves the authenticated user's program context.
- * Priority: program ownership, then program membership (owner/admin/staff/member).
- * Returns the program ID or null.
+ * Resolves the authenticated user's program enrollment context.
+ * Returns program_id and current_course_id from the membership row.
+ * Priority: ownership first, then any membership.
  */
-async function resolveUserProgram(
+async function resolveEnrollment(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string
-): Promise<string | null> {
-  // Check ownership first
+): Promise<{ programId: string; currentCourseId: string | null } | null> {
+  // Check ownership first (owner is always a member too, but programs.owner_id is canonical)
   const { data: owned } = await supabase
     .from("programs")
     .select("id")
     .eq("owner_id", userId)
     .order("created_at", { ascending: true })
     .limit(1);
-  if (owned?.length) return owned[0].id;
 
-  // Fall back to membership
-  const { data: memberships } = await supabase
+  const programId = owned?.[0]?.id ?? null;
+
+  if (!programId) {
+    // Fall back to membership
+    const { data: memberships } = await supabase
+      .from("program_members")
+      .select("program_id, current_course_id")
+      .eq("user_id", userId)
+      .limit(1);
+    if (memberships?.length) {
+      return {
+        programId: memberships[0].program_id,
+        currentCourseId: memberships[0].current_course_id,
+      };
+    }
+    return null;
+  }
+
+  // Read current_course_id from the membership row for this program
+  const { data: membership } = await supabase
     .from("program_members")
-    .select("program_id")
+    .select("current_course_id")
+    .eq("program_id", programId)
     .eq("user_id", userId)
-    .limit(1);
-  if (memberships?.length) return memberships[0].program_id;
+    .maybeSingle();
 
-  return null;
+  return {
+    programId,
+    currentCourseId: membership?.current_course_id ?? null,
+  };
 }
 
 export async function ProtectedShell({
@@ -43,7 +63,8 @@ export async function ProtectedShell({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const programId = user ? await resolveUserProgram(supabase, user.id) : null;
+  const enrollment = user ? await resolveEnrollment(supabase, user.id) : null;
+  const programId = enrollment?.programId ?? null;
   const recordHref = programId ? `/programs/${programId}/record` : "/programs";
   const workHref = programId ? `/programs/${programId}/work` : "/programs";
   const researchHref = programId

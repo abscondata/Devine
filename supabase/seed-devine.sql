@@ -63,6 +63,18 @@ update programs
 set description = 'Phased formation in philosophy, theology, Scripture, and Church history leading into conciliar, ecclesial, and sacramental consolidation.'
 where title = 'Devine College Core';
 
+-- Set initial enrollment to PHIL 501 (the first foundation course).
+update program_members
+set current_course_id = (
+  select c.id from courses c
+  join programs p on p.id = c.program_id
+  where c.code = 'PHIL 501' and p.title = 'Devine College Core'
+  limit 1
+)
+where current_course_id is null
+  and role = 'owner'
+  and program_id = (select id from programs where title = 'Devine College Core' limit 1);
+
 -- Ensure requirement block ordering remains unique before inserting new blocks
 update requirement_blocks
 set position = 7

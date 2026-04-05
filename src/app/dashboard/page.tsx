@@ -40,9 +40,9 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  // ─── RESOLVE CURRENT PROGRAM ───
-  // The user's program is determined by ownership, then membership.
-  // All Home state is scoped to this one program.
+  // ─── RESOLVE ENROLLMENT ───
+  // Read the user's program membership including current_course_id.
+  // This is the single source of enrollment truth for the entire page.
   const { data: ownedPrograms } = await supabase
     .from("programs")
     .select("id, title")
@@ -50,13 +50,24 @@ export default async function DashboardPage() {
     .order("created_at", { ascending: true })
     .limit(1);
   let currentProgram = ownedPrograms?.[0] ?? null;
-  if (!currentProgram) {
+  let enrolledCourseId: string | null = null;
+
+  if (currentProgram) {
+    const { data: membership } = await supabase
+      .from("program_members")
+      .select("current_course_id")
+      .eq("program_id", currentProgram.id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    enrolledCourseId = membership?.current_course_id ?? null;
+  } else {
     const { data: memberships } = await supabase
       .from("program_members")
-      .select("program_id")
+      .select("program_id, current_course_id")
       .eq("user_id", user.id)
       .limit(1);
     if (memberships?.length) {
+      enrolledCourseId = memberships[0].current_course_id;
       const { data: memberProgram } = await supabase
         .from("programs")
         .select("id, title")
@@ -366,16 +377,21 @@ export default async function DashboardPage() {
   // All state is scoped to currentProgram.
   // ═══════════════════════════════════════════════════════════════════
 
-  // 1. CURRENT COURSE — explicit selection, not inferred from global scan.
-  //    First prerequisite-valid incomplete course sorted by sequence_position.
-  //    This is the institutional current-course truth.
-  const activeCourse = courseSummaries
+  // 1. CURRENT COURSE — governed by explicit enrollment truth.
+  //    If enrolledCourseId is set in program_members, that is the current course.
+  //    If null (enrollment not yet set), fall back to sequence-position inference.
+  const enrolledCourse = enrolledCourseId
+    ? courseSummaries.find((c) => c.id === enrolledCourseId) ?? null
+    : null;
+  const inferredCourse = courseSummaries
     .filter((c) => {
       if (c.isComplete) return false;
       const r = readinessByCourse.get(c.id);
       return r?.status === "ready";
     })
     .sort((a, b) => (a.sequence_position ?? 9999) - (b.sequence_position ?? 9999))[0] ?? null;
+  // Enrollment governs. Inference is the fallback.
+  const activeCourse = enrolledCourse ?? inferredCourse;
 
   // 2. CURRENT UNIT — first incomplete unit inside the active course only.
   //    No cross-course scanning. No alphabetical fallback.
@@ -449,10 +465,9 @@ export default async function DashboardPage() {
   );
 
   // 6. IDENTITY — enrollment is a fact, completion state is a fact.
-  //    "Academic standing" is not claimed because no formal standing
-  //    system exists. We report completion state truthfully.
   const allBlocksSatisfied = blockSummaries.every((s) => s.satisfied);
   const enrollmentStatus = currentProgram ? "Enrolled" : "No program";
+  const enrollmentSource = enrolledCourse ? "explicit" : activeCourse ? "inferred" : "none";
   const completionState = allBlocksSatisfied
     ? "Program complete"
     : activeCourse || completedCourses.length > 0

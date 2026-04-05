@@ -50,6 +50,10 @@ alter table program_members
 
 create index if not exists idx_program_members_user on program_members(user_id);
 
+-- Explicit enrollment state: which course the student is currently studying.
+-- NULL means infer from sequence position (backward-compatible).
+alter table program_members add column if not exists current_course_id uuid references courses(id) on delete set null;
+
 -- Academic domains (top-level divisions)
 create table if not exists domains (
   id uuid primary key default gen_random_uuid(),

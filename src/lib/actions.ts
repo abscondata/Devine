@@ -1688,3 +1688,48 @@ export async function revokeReviewLink(formData: FormData) {
   revalidatePath("/admin/review-links");
   redirect("/admin/review-links");
 }
+
+export async function setCurrentCourseEnrollment(formData: FormData) {
+  const courseId = normalizeText(formData.get("courseId"));
+  const programId = normalizeText(formData.get("programId"));
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  await requireAdminAccess(supabase, user.id);
+
+  if (!courseId || !programId) {
+    redirect("/dashboard?error=" + encodeMessage("Course or program missing."));
+  }
+
+  // Verify the course belongs to the program
+  const { data: course } = await supabase
+    .from("courses")
+    .select("id")
+    .eq("id", courseId)
+    .eq("program_id", programId)
+    .maybeSingle();
+
+  if (!course) {
+    redirect("/dashboard?error=" + encodeMessage("Course not found in program."));
+  }
+
+  const { error } = await supabase
+    .from("program_members")
+    .update({ current_course_id: courseId })
+    .eq("program_id", programId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    redirect("/dashboard?error=" + encodeMessage(error.message));
+  }
+
+  revalidatePath("/dashboard");
+  redirect("/dashboard");
+}
