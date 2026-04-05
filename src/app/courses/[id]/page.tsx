@@ -73,14 +73,14 @@ export default async function CoursePage({
   const { data: readings } = moduleIds.length
     ? await supabase
         .from("readings")
-        .select("id, module_id, status, estimated_hours, position")
+        .select("id, module_id, title, author, source_type, primary_or_secondary, tradition_or_era, pages_or_length, estimated_hours, status, position")
         .in("module_id", moduleIds)
     : { data: [] };
 
   const { data: assignments } = moduleIds.length
     ? await supabase
         .from("assignments")
-        .select("id, module_id")
+        .select("id, module_id, title, assignment_type, due_at")
         .in("module_id", moduleIds)
     : { data: [] };
 
@@ -329,12 +329,15 @@ export default async function CoursePage({
             <span>{course.code}</span>
             {course.level ? <span>{course.level}</span> : null}
             {course.credits_or_weight ? <span>{course.credits_or_weight} credits</span> : null}
+            <span>{moduleSummaries.length} units</span>
+            <span>{(readings ?? []).length} readings</span>
+            <span>{(assignments ?? []).length} written assignments</span>
           </div>
           <h1 className="text-3xl">{course.title}</h1>
-          {course.description ? <p className="text-sm text-[var(--muted)]">{course.description}</p> : null}
+          {course.description ? <p className="font-serif text-sm leading-relaxed text-[var(--muted)]">{course.description}</p> : null}
         </header>
 
-        {/* ─── Your progress ─── */}
+        {/* ─── Progress ─── */}
         <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Progress</p>
@@ -359,6 +362,96 @@ export default async function CoursePage({
             <p className="text-sm font-semibold text-[var(--text)]">All requirements fulfilled.</p>
           ) : null}
         </section>
+
+        {/* ─── Course requirements ─── */}
+        <section className="space-y-3">
+          <h2 className="text-lg">Course Requirements</h2>
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-4 text-sm text-[var(--muted)]">
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-1">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Readings</p>
+                <p>{(readings ?? []).length} assigned readings</p>
+                {totalHours ? <p>{totalHours.toFixed(1)} estimated hours</p> : null}
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Written work</p>
+                <p>{(assignments ?? []).length} assignments</p>
+                <p>Each requires a final submission</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Completion standard</p>
+                <p>All readings complete</p>
+                <p>All written work finalized</p>
+                <p>Critique recommended, not required</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ─── Required materials ─── */}
+        {(() => {
+          const allReadings = (readings ?? []) as { id: string; title: string | null; author: string | null; source_type: string | null; primary_or_secondary: string | null; tradition_or_era: string | null; pages_or_length: string | null }[];
+          // Group by source_type
+          const bySource = new Map<string, typeof allReadings>();
+          allReadings.forEach((r) => {
+            const key = r.source_type ?? "Other";
+            const list = bySource.get(key) ?? [];
+            list.push(r);
+            bySource.set(key, list);
+          });
+          // Deduplicate by author+title (same text assigned in multiple units)
+          const seen = new Set<string>();
+          const unique = allReadings.filter((r) => {
+            const key = `${r.author}|${r.title}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+          const sourceOrder = ["Primary text", "Magisterial text", "Scripture", "Patristic text", "Conciliar text", "Historical text", "Imperial text", "Secondary text"];
+          const orderedSources = [
+            ...sourceOrder.filter((s) => bySource.has(s)),
+            ...Array.from(bySource.keys()).filter((s) => !sourceOrder.includes(s)),
+          ];
+
+          return unique.length > 0 ? (
+            <section className="space-y-3">
+              <h2 className="text-lg">Required Materials</h2>
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
+                {orderedSources.map((sourceType) => {
+                  const items = (bySource.get(sourceType) ?? []).filter((r) => {
+                    const key = `${r.author}|${r.title}`;
+                    return seen.has(key); // all pass since we built seen from allReadings
+                  });
+                  // Deduplicate within source type
+                  const seenInGroup = new Set<string>();
+                  const uniqueItems = items.filter((r) => {
+                    const key = `${r.author}|${r.title}`;
+                    if (seenInGroup.has(key)) return false;
+                    seenInGroup.add(key);
+                    return true;
+                  });
+                  if (!uniqueItems.length) return null;
+                  return (
+                    <div key={sourceType} className="p-5 space-y-2">
+                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">{sourceType}</p>
+                      <ul className="space-y-1 text-sm text-[var(--muted)]">
+                        {uniqueItems.map((r, i) => (
+                          <li key={r.id ?? i}>
+                            {r.author ? <span className="font-semibold">{r.author}</span> : null}
+                            {r.author && r.title ? ", " : null}
+                            {r.title ? <span className="font-serif italic">{r.title}</span> : null}
+                            {r.pages_or_length ? <span> ({r.pages_or_length})</span> : null}
+                            {r.tradition_or_era ? <span className="text-xs"> · {r.tradition_or_era}</span> : null}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null;
+        })()}
 
         <section className="space-y-4">
           <h2 className="text-lg">Syllabus</h2>
@@ -399,10 +492,12 @@ export default async function CoursePage({
                           <div className="space-y-1">
                             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Readings</p>
                             <ol className="space-y-0.5 text-sm text-[var(--muted)]">
-                              {(unitReadings as { id?: string; title?: string | null; position?: number }[])
+                              {(unitReadings as { id?: string; title?: string | null; author?: string | null; position?: number }[])
                                 .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
                                 .map((r, i) => (
-                                  <li key={r.id ?? i}>{r.title}</li>
+                                  <li key={r.id ?? i}>
+                                    {r.author ? `${r.author}, ` : ""}{r.title}
+                                  </li>
                                 ))}
                             </ol>
                           </div>
@@ -411,8 +506,10 @@ export default async function CoursePage({
                           <div className="space-y-1">
                             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Written work</p>
                             <ol className="space-y-0.5 text-sm text-[var(--muted)]">
-                              {(unitAssignments as { id?: string; title?: string | null }[]).map((a, i) => (
-                                <li key={a.id ?? i}>{a.title}</li>
+                              {(unitAssignments as { id?: string; title?: string | null; assignment_type?: string }[]).map((a, i) => (
+                                <li key={a.id ?? i}>
+                                  {a.title}{a.assignment_type ? ` (${a.assignment_type.replace(/_/g, " ")})` : ""}
+                                </li>
                               ))}
                             </ol>
                           </div>
