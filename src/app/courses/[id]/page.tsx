@@ -12,6 +12,10 @@ import {
   buildThesisSummaryByCourseId,
 } from "@/lib/thesis-governance";
 import { ProtectedShell } from "@/components/protected-shell";
+import {
+  computeTermSchedule,
+  formatScheduleDate,
+} from "@/lib/term-schedule";
 
 export default async function CoursePage({
   params,
@@ -293,6 +297,27 @@ export default async function CoursePage({
         .find((item) => item.code === course.code)?.index
     : null;
 
+  // ─── TERM SCHEDULE (if this course is in the current term) ───
+  const { data: currentTerm } = course.program?.id
+    ? await supabase
+        .from("academic_terms")
+        .select("id, title, starts_at, ends_at")
+        .eq("program_id", course.program.id)
+        .eq("is_current", true)
+        .maybeSingle()
+    : { data: null };
+
+  const schedule = currentTerm?.starts_at && currentTerm?.ends_at
+    ? computeTermSchedule({
+        termStartsAt: currentTerm.starts_at,
+        termEndsAt: currentTerm.ends_at,
+        courses: [{
+          id: course.id,
+          modules: (modules ?? []).map((m) => ({ id: m.id, position: m.position })),
+        }],
+      })
+    : null;
+
   return (
     <ProtectedShell userEmail={user.email ?? null}>
       <div className="space-y-10">
@@ -374,6 +399,7 @@ export default async function CoursePage({
                 const unitReadings = readingsByModule.get(module.id) ?? [];
                 const unitAssignments = assignmentsByModule.get(module.id) ?? [];
                 const isComplete = module.completedTasks === module.totalTasks && module.totalTasks > 0;
+                const unitSched = schedule?.unitSchedules.get(module.id);
 
                 return (
                   <div key={module.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
@@ -384,6 +410,7 @@ export default async function CoursePage({
                       <div className="flex flex-wrap items-center justify-between gap-4">
                         <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                           Unit {module.position + 1}{module.position + 1 === moduleSummaries.length ? " · Final unit" : ""}
+                          {unitSched ? ` · ${formatScheduleDate(unitSched.startsAt)} – ${formatScheduleDate(unitSched.endsAt)}` : ""}
                         </p>
                         <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                           {isComplete ? "Complete" : `${module.completedTasks} of ${module.totalTasks} fulfilled`}

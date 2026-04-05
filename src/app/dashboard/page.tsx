@@ -14,6 +14,14 @@ import {
   buildMissingThesisSummary,
   buildThesisSummaryByCourseId,
 } from "@/lib/thesis-governance";
+import {
+  computeTermSchedule,
+  computeReadingTargetDate,
+  computeWorkDueDate,
+  formatScheduleDate,
+  isDueThisWeek,
+  isPast,
+} from "@/lib/term-schedule";
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "";
@@ -245,13 +253,51 @@ export default async function DashboardPage() {
     return a.due_at.localeCompare(b.due_at);
   });
 
-  // Next due across all courses
-  const nextDue = allOpenWork[0] ?? null;
-
-  // Term dates
-  const termEnd = currentTerm?.ends_at
-    ? new Date(currentTerm.ends_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+  // ─── TERM SCHEDULE ───
+  const schedule = currentTerm?.starts_at && currentTerm?.ends_at
+    ? computeTermSchedule({
+        termStartsAt: currentTerm.starts_at,
+        termEndsAt: currentTerm.ends_at,
+        courses: (courses ?? []).map((c) => ({
+          id: c.id,
+          modules: (modules ?? []).filter((m) => m.course_id === c.id).map((m) => ({ id: m.id, position: m.position })),
+        })),
+      })
     : null;
+
+  // Enrich reading queue with target dates
+  const enrichedReadings = allUnreadReadings.map((r) => {
+    const unitSched = schedule?.unitSchedules.get(r.module_id);
+    if (!unitSched) return { ...r, targetDate: null as Date | null };
+    const totalInUnit = (readingsByModule.get(r.module_id) ?? []).length;
+    const posInUnit = (readingsByModule.get(r.module_id) ?? []).findIndex((x) => x.id === r.id);
+    const targetDate = computeReadingTargetDate({ unitSchedule: unitSched, readingPosition: Math.max(0, posInUnit), totalReadings: totalInUnit });
+    return { ...r, targetDate };
+  });
+  enrichedReadings.sort((a, b) => {
+    if (!a.targetDate && !b.targetDate) return 0;
+    if (!a.targetDate) return 1;
+    if (!b.targetDate) return -1;
+    return a.targetDate.getTime() - b.targetDate.getTime();
+  });
+
+  // Enrich writing queue with computed due dates
+  const enrichedWork = allOpenWork.map((a) => {
+    const unitSched = schedule?.unitSchedules.get(a.module_id);
+    if (!unitSched) return { ...a, computedDue: a.due_at ? new Date(a.due_at) : null as Date | null };
+    const computedDue = computeWorkDueDate({ unitSchedule: unitSched, explicitDueAt: a.due_at });
+    return { ...a, computedDue };
+  });
+  enrichedWork.sort((a, b) => {
+    if (!a.computedDue && !b.computedDue) return 0;
+    if (!a.computedDue) return 1;
+    if (!b.computedDue) return -1;
+    return a.computedDue.getTime() - b.computedDue.getTime();
+  });
+
+  const nextDue = enrichedWork[0] ?? null;
+  const dueThisWeek = enrichedWork.filter((a) => a.computedDue && isDueThisWeek(a.computedDue));
+  const overdueWork = enrichedWork.filter((a) => a.computedDue && isPast(a.computedDue));
 
   return (
     <ProtectedShell userEmail={user.email ?? null}>
@@ -265,14 +311,11 @@ export default async function DashboardPage() {
           {currentTerm ? (
             <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
               <h1 className="text-3xl">{currentTerm.title}</h1>
-              {termEnd ? (
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Ends {termEnd}
-                </p>
-              ) : null}
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                {termCourseSummaries.length} course{termCourseSummaries.length === 1 ? "" : "s"}
-              </p>
+              <div className="flex flex-wrap gap-x-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                {schedule ? <span>Week {schedule.currentWeek} of {schedule.totalWeeks}</span> : null}
+                <span>{termCourseSummaries.length} course{termCourseSummaries.length === 1 ? "" : "s"}</span>
+                {currentTerm.ends_at ? <span>Ends {formatScheduleDate(new Date(currentTerm.ends_at))}</span> : null}
+              </div>
             </div>
           ) : (
             <h1 className="text-3xl">College Home</h1>
@@ -320,9 +363,12 @@ export default async function DashboardPage() {
                       <Link href={`/modules/${summary.currentUnit.id}`} className="text-sm font-semibold hover:text-[var(--accent-soft)]">
                         Unit {summary.currentUnit.position + 1} of {summary.totalUnits}: {summary.currentUnit.title}
                       </Link>
-                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                        {summary.currentUnit.completedTasks} of {summary.currentUnit.totalTasks} fulfilled
-                      </p>
+                      <div className="flex flex-wrap gap-x-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                        <span>{summary.currentUnit.completedTasks} of {summary.currentUnit.totalTasks} fulfilled</span>
+                        {schedule?.unitSchedules.get(summary.currentUnit.id) ? (
+                          <span>Due {formatScheduleDate(schedule.unitSchedules.get(summary.currentUnit.id)!.endsAt)}</span>
+                        ) : null}
+                      </div>
                     </div>
                     {summary.nextAction ? (
                       <p className="text-xs text-[var(--muted)]">
@@ -340,27 +386,34 @@ export default async function DashboardPage() {
           </section>
         ) : null}
 
-        {/* ─── Reading queue (cross-course) ─── */}
-        {allUnreadReadings.length > 0 ? (
+        {/* ─── Reading queue (cross-course, with target dates) ─── */}
+        {enrichedReadings.length > 0 ? (
           <section className="space-y-3">
             <h2 className="text-lg">Reading Queue</h2>
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
-              {allUnreadReadings.slice(0, 8).map((r) => (
+              {enrichedReadings.slice(0, 8).map((r) => (
                 <div key={r.id} className="flex items-center justify-between gap-4 px-5 py-3">
-                  <span className="text-sm text-[var(--muted)]">{r.title}</span>
-                  <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] shrink-0">{r.courseCode}</span>
+                  <div className="space-y-0.5">
+                    <p className="text-sm text-[var(--muted)]">{r.title}</p>
+                    <p className="text-xs text-[var(--muted)]">{r.courseCode}</p>
+                  </div>
+                  {r.targetDate ? (
+                    <span className={`text-xs uppercase tracking-[0.2em] shrink-0 ${isPast(r.targetDate) ? "text-[var(--danger)]" : "text-[var(--muted)]"}`}>
+                      {isPast(r.targetDate) ? "Overdue" : formatScheduleDate(r.targetDate)}
+                    </span>
+                  ) : null}
                 </div>
               ))}
             </div>
           </section>
         ) : null}
 
-        {/* ─── Writing queue (cross-course, sorted by due date) ─── */}
-        {allOpenWork.length > 0 ? (
+        {/* ─── Writing queue (cross-course, with due dates) ─── */}
+        {enrichedWork.length > 0 ? (
           <section className="space-y-3">
             <h2 className="text-lg">Writing Queue</h2>
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
-              {allOpenWork.slice(0, 8).map((a) => (
+              {enrichedWork.slice(0, 8).map((a) => (
                 <Link
                   key={a.id}
                   href={`/assignments/${a.id}`}
@@ -372,9 +425,9 @@ export default async function DashboardPage() {
                       {a.courseCode} · {a.assignment_type?.replace(/_/g, " ")}
                     </p>
                   </div>
-                  {a.due_at ? (
-                    <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] shrink-0">
-                      Due {formatDate(a.due_at)}
+                  {a.computedDue ? (
+                    <span className={`text-xs uppercase tracking-[0.2em] shrink-0 ${isPast(a.computedDue) ? "text-[var(--danger)]" : isDueThisWeek(a.computedDue) ? "text-[var(--text)] font-semibold" : "text-[var(--muted)]"}`}>
+                      {isPast(a.computedDue) ? "Overdue" : isDueThisWeek(a.computedDue) ? `Due ${formatScheduleDate(a.computedDue)}` : formatScheduleDate(a.computedDue)}
                     </span>
                   ) : null}
                 </Link>
