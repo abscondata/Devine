@@ -125,6 +125,8 @@ export default async function AssignmentPage({
       <div className="space-y-10">
         <header className="space-y-3">
           <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            <Link href="/dashboard">My Term</Link>
+            <span>/</span>
             <Link href={`/courses/${assignment.module?.course?.id}`}>
               {assignment.module?.course?.title ?? "Course"}
             </Link>
@@ -138,6 +140,7 @@ export default async function AssignmentPage({
             <div className="flex flex-wrap gap-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
               <span>{assignment.assignment_type.replace(/_/g, " ")}</span>
               {assignment.due_at ? <span>Due {formatDate(assignment.due_at)}</span> : null}
+              <span>{hasFinal ? "Final submitted" : latestSubmission ? `Draft v${latestSubmission.version}` : "Not submitted"}</span>
             </div>
           </div>
         </header>
