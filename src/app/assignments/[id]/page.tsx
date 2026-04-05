@@ -124,37 +124,35 @@ export default async function AssignmentPage({
     <ProtectedShell userEmail={user.email ?? null}>
       <div className="space-y-10">
         <header className="space-y-3">
-          <Link
-            href={`/modules/${assignment.module?.id}`}
-            className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
-          >
-            {assignment.module?.title ?? "Module"}
-          </Link>
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-2">
-              <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
-                {assignment.module?.course?.title ?? "Course"}
-              </p>
-              <h1 className="text-3xl font-semibold">{assignment.title}</h1>
-              <div className="flex flex-wrap gap-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                <span>{assignment.assignment_type.replace(/_/g, " ")}</span>
-                <span>{assignment.due_at ? formatDate(assignment.due_at) : "No deadline"}</span>
-              </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            <Link href={`/courses/${assignment.module?.course?.id}`}>
+              {assignment.module?.course?.title ?? "Course"}
+            </Link>
+            <span>/</span>
+            <Link href={`/modules/${assignment.module?.id}`}>
+              {assignment.module?.title ?? "Unit"}
+            </Link>
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-3xl">{assignment.title}</h1>
+            <div className="flex flex-wrap gap-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+              <span>{assignment.assignment_type.replace(/_/g, " ")}</span>
+              {assignment.due_at ? <span>Due {formatDate(assignment.due_at)}</span> : null}
             </div>
           </div>
         </header>
 
         <section className="space-y-3">
-          <h2 className="text-xl font-semibold">Instructions</h2>
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
-            <div className="markdown whitespace-pre-wrap text-sm text-[var(--muted)]">
+          <h2 className="text-xl">Instructions</h2>
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
+            <div className="font-serif text-[var(--text)] leading-relaxed whitespace-pre-wrap">
               {assignment.instructions}
             </div>
           </div>
         </section>
 
         <section className="space-y-4">
-          <h2 className="text-xl font-semibold">Submit Work</h2>
+          <h2 className="text-xl">Your Submission</h2>
 
           {error ? (
             <div className="rounded-lg border border-[var(--danger)]/30 bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--danger)]">
@@ -178,9 +176,9 @@ export default async function AssignmentPage({
               <input type="hidden" name="assignmentId" value={assignment.id} />
               <textarea
                 name="content"
-                rows={10}
+                rows={12}
                 required
-                className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-4 py-3 font-serif leading-relaxed"
               />
               <label className="flex items-center gap-3 text-sm text-[var(--muted)]">
                 <input
@@ -194,14 +192,14 @@ export default async function AssignmentPage({
                 type="submit"
                 className="rounded-md border border-[var(--accent)] bg-[var(--accent)] px-4 py-2 text-sm text-white"
               >
-                Submit Version
+                Submit
               </button>
             </form>
           )}
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-xl font-semibold">Assignment Standing</h2>
+          <h2 className="text-xl">Assignment Standing</h2>
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-2 text-sm text-[var(--muted)]">
             <p className="text-sm font-semibold text-[var(--text)]">
               {standingSummary}
@@ -229,7 +227,7 @@ export default async function AssignmentPage({
         </section>
 
         <section className="space-y-4">
-          <h2 className="text-xl font-semibold">Submission History</h2>
+          <h2 className="text-xl">Submission History</h2>
           {hasPostFinalDrafts && finalSubmission ? (
             <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--muted)]">
               Drafts exist after the locked final (version {finalSubmission.version}).

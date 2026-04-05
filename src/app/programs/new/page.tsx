@@ -2,7 +2,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createProgram } from "@/lib/actions";
-import { ProtectedShell } from "@/components/protected-shell";
+import { requireAdminAccess } from "@/lib/admin-gate";
+import { AdminShell } from "@/components/admin-shell";
 
 export default async function NewProgramPage({
   searchParams,
@@ -18,10 +19,12 @@ export default async function NewProgramPage({
     redirect("/login");
   }
 
+  await requireAdminAccess(supabase, user.id);
+
   const { error } = await searchParams;
 
   return (
-    <ProtectedShell userEmail={user.email ?? null}>
+    <AdminShell userEmail={user.email ?? null}>
       <div className="max-w-3xl space-y-8">
         <header className="space-y-2">
           <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
@@ -88,6 +91,6 @@ export default async function NewProgramPage({
           </div>
         </form>
       </div>
-    </ProtectedShell>
+    </AdminShell>
   );
 }

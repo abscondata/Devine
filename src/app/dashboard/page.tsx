@@ -347,390 +347,242 @@ export default async function DashboardPage() {
   const currentAssignments = currentWork.currentAssignments;
   const nextAction = currentWork.nextAction;
 
+  // Derive the current active course from the current module
+  const activeCourse = currentModule
+    ? courseSummaries.find((c) => c.id === currentModule.course_id) ?? null
+    : null;
+
+  // Derive the active course's module count for "Unit X of Y"
+  const activeCourseTotalModules = activeCourse
+    ? moduleProgress.filter((m) => m.course_id === activeCourse.id).length
+    : 0;
+
   return (
     <ProtectedShell userEmail={user.email ?? null}>
       <div className="space-y-10">
-        <header className="space-y-2">
+        <header className="space-y-1">
           <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
-            Overview
+            Devine College{programSummaries.length ? ` · ${programSummaries[0].title}` : ""}
           </p>
-          <h1 className="text-3xl font-semibold">Dashboard</h1>
-          <p className="text-sm text-[var(--muted)]">
-            Active coursework, current module, and open work.
-          </p>
+          <h1 className="text-3xl">College Home</h1>
         </header>
 
+        {activeCourse && currentModule ? (
+          <section className="space-y-4">
+            <h2 className="text-2xl">Current Course of Study</h2>
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 space-y-5">
+              <div className="space-y-2">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                  {activeCourse.code ?? ""}{activeCourse.code ? " · " : ""}{activeCourse.completedTasks} of {activeCourse.totalTasks} requirements fulfilled
+                </p>
+                <Link href={`/courses/${activeCourse.id}`}>
+                  <h3 className="text-2xl font-semibold">{activeCourse.title}</h3>
+                </Link>
+                <p className="text-sm text-[var(--muted)]">
+                  {activeCourse.description ?? ""}
+                </p>
+              </div>
+
+              <Link
+                href={`/modules/${currentModule.id}`}
+                className="block rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4 space-y-2 transition hover:border-[var(--accent-soft)]"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                    Current unit{activeCourseTotalModules ? ` · ${currentModule.position + 1} of ${activeCourseTotalModules}` : ""}
+                  </p>
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                    Continue current unit
+                  </p>
+                </div>
+                <p className="text-lg font-semibold text-[var(--text)]">
+                  {currentModule.title}
+                </p>
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                  {currentModule.completedTasks} of {currentModule.totalTasks} requirements fulfilled
+                </p>
+              </Link>
+
+              {(currentReadings.length > 0 || currentAssignments.length > 0) ? (
+                <div className="grid gap-4 md:grid-cols-2">
+                  {currentReadings.length > 0 ? (
+                    <div className="space-y-2">
+                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                        Assigned readings
+                      </p>
+                      <ul className="space-y-1 text-sm text-[var(--muted)]">
+                        {currentReadings.map((reading) => (
+                          <li key={reading.id}>{reading.title}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {currentAssignments.length > 0 ? (
+                    <div className="space-y-2">
+                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                        Outstanding written work
+                      </p>
+                      <ul className="space-y-1 text-sm text-[var(--muted)]">
+                        {currentAssignments.map((assignment) => (
+                          <li key={assignment.id}>{assignment.title}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {nextAction ? (
+                <div className="border-t border-[var(--border)] pt-4 space-y-1">
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                    Next obligation
+                  </p>
+                  <p className="text-sm font-semibold text-[var(--text)]">
+                    {nextAction.title}
+                  </p>
+                  <p className="text-sm text-[var(--muted)]">{nextAction.reason}</p>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : (
+          <section className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)]">
+            All current coursework is complete. See the curriculum sequence below for the next course.
+          </section>
+        )}
+
         <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Foundations Phase</h2>
-            <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              Opening sequence
-            </span>
-          </div>
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-4">
-            <p className="text-sm text-[var(--muted)]">
-              The foundations sequence establishes method and content for the
-              entire curriculum. PHIL 501 undergirds THEO 510; HIST 520 and
-              SCRP 530 complete the early ecclesial and scriptural arc.
-            </p>
-            {foundationCourses.length ? (
-              <div className="grid gap-3 md:grid-cols-2">
-                {foundationCourses.map((course, index) => (
+          <h2 className="text-xl">Curriculum Sequence</h2>
+          <p className="text-sm text-[var(--muted)]">
+            The foundations sequence establishes method and content for the
+            entire curriculum. PHIL 501 undergirds THEO 510; HIST 520 and
+            SCRP 530 complete the early ecclesial and scriptural arc.
+          </p>
+          {foundationCourses.length ? (
+            <div className="space-y-3">
+              {foundationCourses.map((course, index) => {
+                const isActive = activeCourse?.id === course.id;
+                const standing = readinessByCourse.get(course.id);
+                const standingLabel = standing?.status === "completed"
+                  ? "Complete"
+                  : standing?.status === "ready"
+                  ? isActive ? "In progress" : "Ready"
+                  : "Prerequisites pending";
+
+                return (
                   <Link
                     key={course.id}
                     href={`/courses/${course.id}`}
-                    className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4 text-sm text-[var(--muted)] hover:border-[var(--accent-soft)]"
+                    className={`block rounded-xl border bg-[var(--surface)] p-5 transition hover:border-[var(--accent-soft)] ${
+                      isActive ? "border-[var(--accent-soft)]" : "border-[var(--border)]"
+                    }`}
                   >
-                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                      Step {index + 1}
-                    </p>
-                    <h3 className="mt-2 text-base font-semibold text-[var(--text)]">
-                      {course.code ? `${course.code} — ` : ""}
-                      {course.title}
-                    </h3>
-                    <p className="mt-2 text-sm text-[var(--muted)]">
-                      {course.description ?? "No description provided."}
-                    </p>
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                      <div className="space-y-1">
+                        <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                          {course.code ?? `Step ${index + 1}`}{isActive ? " · Current course" : ""}
+                        </p>
+                        <h3 className="text-lg font-semibold">{course.title}</h3>
+                      </div>
+                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                        {standingLabel}
+                      </p>
+                    </div>
                   </Link>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-[var(--muted)]">
-                Foundations courses are not yet seeded.
+                );
+              })}
+            </div>
+          ) : null}
+          {recommendedNext && !foundationCourses.some((c) => c.id === recommendedNext.id) ? (
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                Next in sequence · Prerequisites satisfied
               </p>
-            )}
-          </div>
+              <Link
+                href={`/courses/${recommendedNext.id}`}
+                className="block rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 transition hover:border-[var(--accent-soft)]"
+              >
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                  {recommendedNext.code ?? ""}
+                </p>
+                <h3 className="mt-1 text-lg font-semibold">{recommendedNext.title}</h3>
+              </Link>
+            </div>
+          ) : null}
         </section>
 
         <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Academic Record</h2>
-            <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              Standing
-            </span>
-          </div>
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-4">
+          <h2 className="text-xl">Academic Record</h2>
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
             <div className="flex flex-wrap gap-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
               <span>Completed {completedCourses.length}</span>
               <span>In progress {inProgressCourses.length}</span>
               <span>Not started {notStartedCourses.length}</span>
             </div>
-            <div className="grid gap-4 md:grid-cols-3 text-sm text-[var(--muted)]">
-              <div className="space-y-2">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Officially Complete
-                </p>
-                {completedCourses.length ? (
-                  <ul className="space-y-2">
-                    {completedCourses.map((course) => (
-                      <li key={course.id}>
-                        {course.code ? `${course.code} — ` : ""}
-                        {course.title}
-                        {course.finalDate ? (
-                          <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                            {" "}
-                            · Final {formatDate(course.finalDate)}
-                          </span>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p>No completed courses yet.</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                  In Progress
-                </p>
-                {inProgressCourses.length ? (
-                  <ul className="space-y-2">
-                    {inProgressCourses.map((course) => (
-                      <li key={course.id}>
-                        {course.code ? `${course.code} — ` : ""}
-                        {course.title}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p>No courses currently in progress.</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Not Yet Started
-                </p>
-                {notStartedCourses.length ? (
-                  <ul className="space-y-2">
-                    {notStartedCourses.map((course) => (
-                      <li key={course.id}>
-                        {course.code ? `${course.code} — ` : ""}
-                        {course.title}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p>All courses have activity.</p>
-                )}
-              </div>
-            </div>
+            {completedCourses.length ? (
+              <ul className="space-y-1 text-sm text-[var(--muted)]">
+                {completedCourses.map((course) => (
+                  <li key={course.id}>
+                    {course.code ? `${course.code} — ` : ""}
+                    {course.title}
+                    {course.finalDate ? (
+                      <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                        {" "}· {formatDate(course.finalDate)}
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         </section>
 
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Program Standing</h2>
-            <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              Constitutional progress
-            </span>
-          </div>
-          {programSummaries.length ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              {programSummaries.map((program) => (
+        {programSummaries.length ? (
+          <section className="space-y-4">
+            <h2 className="text-xl">Program Standing</h2>
+            {programSummaries.map((program) => (
+              <Link
+                key={program.id}
+                href={`/programs/${program.id}/audit`}
+                className="block rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm text-[var(--muted)] transition hover:border-[var(--accent-soft)]"
+              >
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                  {program.title}
+                </p>
+                <p className="mt-2">
+                  {program.satisfiedBlocks} of {program.totalBlocks} requirement blocks satisfied
+                  {program.remainingBlocks > 0 ? ` · ${program.remainingBlocks} remaining` : ""}
+                </p>
+              </Link>
+            ))}
+          </section>
+        ) : null}
+
+        {openAssignments.length ? (
+          <section className="space-y-4">
+            <h2 className="text-xl">Upcoming Work</h2>
+            <div className="space-y-3">
+              {openAssignments.slice(0, 6).map((assignment) => (
                 <Link
-                  key={program.id}
-                  href={`/programs/${program.id}/audit`}
-                  className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm text-[var(--muted)] hover:border-[var(--accent-soft)]"
+                  key={assignment.id}
+                  href={`/assignments/${assignment.id}`}
+                  className="flex items-center justify-between gap-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 transition hover:border-[var(--accent-soft)]"
                 >
-                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                    {program.title}
-                  </p>
-                  <p className="mt-2 text-sm text-[var(--muted)]">
-                    Requirement blocks satisfied {program.satisfiedBlocks}/{program.totalBlocks}
-                  </p>
-                  <p className="mt-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                    Remaining {program.remainingBlocks}
-                  </p>
+                  <h3 className="text-base font-semibold">{assignment.title}</h3>
+                  <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                    {assignment.due_at
+                      ? new Date(assignment.due_at).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })
+                      : ""}
+                  </span>
                 </Link>
               ))}
             </div>
-          ) : (
-            <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)]">
-              No programs found for constitutional audit.
-            </div>
-          )}
-        </section>
-
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Recommended Next</h2>
-            <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              Readiness
-            </span>
-          </div>
-          {recommendedNext ? (
-            <Link
-              href={`/courses/${recommendedNext.id}`}
-              className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 transition hover:border-[var(--accent-soft)]"
-            >
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                {(recommendedNext.code ? `${recommendedNext.code} — ` : "") +
-                  recommendedNext.title}
-              </p>
-              <p className="mt-2 text-sm text-[var(--muted)]">
-                {recommendedNext.description ?? "No description provided."}
-              </p>
-              <p className="mt-3 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                Ready now · {readinessByCourse.get(recommendedNext.id)?.reason ?? ""}
-              </p>
-            </Link>
-          ) : (
-            <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)]">
-              No courses are ready yet. Complete prerequisites to unlock the next step.
-            </div>
-          )}
-        </section>
-
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Active Courses</h2>
-            <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              {courseSummaries.length} total
-            </span>
-          </div>
-          <p className="text-sm text-[var(--muted)]">
-            Official completion requires all readings marked complete (skipped
-            readings do not count) and final submissions for every assignment.
-            Critiques are recommended but do not determine completion.
-          </p>
-          <div className="grid gap-4 md:grid-cols-2">
-            {courseSummaries.length ? (
-              courseSummaries.map((course) => (
-                <Link
-                  key={course.id}
-                  href={`/courses/${course.id}`}
-                  className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 transition hover:border-[var(--accent-soft)]"
-                >
-                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                    {course.program?.title ?? "Program"}
-                  </p>
-                  <h3 className="mt-2 text-lg font-semibold">{course.title}</h3>
-                  <p className="mt-2 text-sm text-[var(--muted)]">
-                    {course.description ?? "No description provided."}
-                  </p>
-                  <p className="mt-3 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                    {readinessByCourse.get(course.id)?.status === "completed"
-                      ? "Completed"
-                      : readinessByCourse.get(course.id)?.status === "ready"
-                      ? "Ready now"
-                      : "Not yet"}
-                    {readinessByCourse.get(course.id)?.status === "blocked"
-                      ? ` · ${readinessByCourse.get(course.id)?.reason}`
-                      : ""}
-                  </p>
-                  <p className="mt-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                    Progress {course.completedTasks}/{course.totalTasks}
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-3 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                    <span>
-                      Final {course.finalAssignments}/{course.totalAssignments}
-                    </span>
-                    {course.draftAssignments ? (
-                      <span>Drafts {course.draftAssignments}</span>
-                    ) : null}
-                    {course.finalAssignments ? (
-                      <span>
-                        Critiqued {course.critiquedFinals}/{course.finalAssignments}
-                      </span>
-                    ) : null}
-                    {course.completedTasks < course.totalTasks ? (
-                      <span>
-                        Blockers
-                        {course.unreadReadings > 0
-                          ? ` ${course.unreadReadings} reading${course.unreadReadings === 1 ? "" : "s"}`
-                          : ""}
-                        {course.missingFinals > 0
-                          ? ` ${course.missingFinals} final${course.missingFinals === 1 ? "" : "s"}`
-                          : ""}
-                        {course.skippedReadings > 0
-                          ? ` ${course.skippedReadings} skipped`
-                          : ""}
-                      </span>
-                    ) : null}
-                  </div>
-                </Link>
-              ))
-            ) : (
-              <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)]">
-                No active courses found. Add courses to populate this view.
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className="grid gap-6 lg:grid-cols-2">
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold">Current Module</h2>
-            {currentModule ? (
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-4">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                    Module {currentModule.position + 1}
-                  </p>
-                  <h3 className="mt-2 text-lg font-semibold">{currentModule.title}</h3>
-                </div>
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Progress {currentModule.completedTasks}/{currentModule.totalTasks}
-                </p>
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                      Open Readings
-                    </p>
-                    {currentReadings.length ? (
-                      <ul className="mt-2 space-y-1 text-sm text-[var(--muted)]">
-                        {currentReadings.map((reading) => (
-                          <li
-                            key={reading.id}
-                            className="flex items-center justify-between gap-3"
-                          >
-                            <span>{reading.title}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="mt-2 text-sm text-[var(--muted)]">
-                        No open readings.
-                      </p>
-                    )}
-                    {currentSkippedReadings.length ? (
-                      <div className="mt-3 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                        Skipped readings (do not count): {currentSkippedReadings.length}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                      Open Assignments
-                    </p>
-                    {currentAssignments.length ? (
-                      <ul className="mt-2 space-y-1 text-sm text-[var(--muted)]">
-                        {currentAssignments.map((assignment) => (
-                          <li key={assignment.id}>{assignment.title}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="mt-2 text-sm text-[var(--muted)]">
-                        No open assignments.
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4 text-sm text-[var(--muted)] space-y-2">
-                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                    Next Required Action
-                  </p>
-                  {nextAction ? (
-                    <>
-                      <p className="text-sm font-semibold text-[var(--text)]">
-                        {nextAction.title}
-                      </p>
-                      <p>{nextAction.reason}</p>
-                    </>
-                  ) : (
-                    <p>All required work in this module is complete.</p>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)]">
-                All modules are complete or no module work exists yet.
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold">Open Assignments</h2>
-            <div className="space-y-3">
-              {openAssignments.length ? (
-                openAssignments.slice(0, 6).map((assignment) => (
-                  <Link
-                    key={assignment.id}
-                    href={`/assignments/${assignment.id}`}
-                    className="flex flex-col gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 transition hover:border-[var(--accent-soft)]"
-                  >
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-base font-semibold">{assignment.title}</h3>
-                      <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                        {assignment.due_at
-                          ? new Date(assignment.due_at).toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric",
-                            })
-                          : "No deadline"}
-                      </span>
-                    </div>
-                  </Link>
-                ))
-              ) : (
-                <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)]">
-                  No open assignments right now.
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
+          </section>
+        ) : null}
       </div>
     </ProtectedShell>
   );

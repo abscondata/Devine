@@ -280,10 +280,10 @@ export default async function CoursePage({
   });
   const readinessStatus =
     readinessState.status === "completed"
-      ? "Completed"
+      ? "Complete"
       : readinessState.status === "ready"
-      ? "Ready now"
-      : "Not yet";
+      ? "Prerequisites satisfied"
+      : "Prerequisites pending";
 
   const foundationOrder = ["PHIL 501", "THEO 510", "HIST 520", "SCRP 530"];
   const isFoundationCourse = foundationOrder.includes(course.code ?? "");
@@ -301,7 +301,7 @@ export default async function CoursePage({
             href="/dashboard"
             className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
           >
-            Dashboard
+            College Home
           </Link>
           <div className="space-y-2">
             {course.program?.id ? (
@@ -316,9 +316,9 @@ export default async function CoursePage({
                 {course.program?.title ?? "Program"}
               </p>
             )}
-            <h1 className="text-3xl font-semibold">{course.title}</h1>
+            <h1 className="text-3xl">{course.title}</h1>
             <p className="text-sm text-[var(--muted)]">
-              {course.description ?? "No course description yet."}
+              {course.description ?? ""}
             </p>
             {isFoundationCourse ? (
               <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
@@ -328,21 +328,11 @@ export default async function CoursePage({
             ) : null}
           </div>
           <div className="flex flex-wrap gap-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-            <span>
-              Progress {completedTasks}/{totalTasks || 0}
-            </span>
-            <span>
-              Estimated reading hours {totalHours ? totalHours.toFixed(1) : "0"}
-            </span>
-            <span>
-              Finals {finalAssignments}/{totalAssignments}
-            </span>
-            {draftAssignments ? <span>Drafts {draftAssignments}</span> : null}
-            {finalAssignments ? (
-              <span>
-                Critiqued {critiquedFinals}/{finalAssignments}
-              </span>
+            <span>{completedTasks} of {totalTasks || 0} requirements fulfilled</span>
+            {totalHours ? (
+              <span>Estimated reading: {totalHours.toFixed(1)} hours</span>
             ) : null}
+            <span>{finalAssignments} of {totalAssignments} final submissions</span>
             <Link
               href={`/courses/${course.id}/dossier`}
               className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
@@ -352,128 +342,138 @@ export default async function CoursePage({
           </div>
         </header>
 
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold">Official Completion</h2>
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3 text-sm text-[var(--muted)]">
-            <p>
-              Official completion requires all readings marked complete (skipped
-              readings do not count) and final submissions for every assignment.
-              Critiques are recommended but do not determine completion. RSYN 720
-              additionally requires an active thesis project with all required
-              milestones complete.
+        {nextModule ? (
+          <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-2">
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+              Current study
             </p>
+            <p className="text-sm text-[var(--muted)]">
+              <Link
+                href={`/modules/${nextModule.id}`}
+                className="font-semibold text-[var(--text)]"
+              >
+                Unit {nextModule.position + 1}: {nextModule.title}
+              </Link>
+              {" "}— the earliest incomplete unit in this course.
+            </p>
+          </section>
+        ) : isCourseComplete ? (
+          <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
+            <p className="text-sm font-semibold text-[var(--text)]">
+              This course is officially complete.
+            </p>
+          </section>
+        ) : null}
+
+        <section className="space-y-4">
+          <h2 className="text-xl">Course of Study</h2>
+
+          {moduleSummaries.length ? (
+            <div className="space-y-3">
+              {moduleSummaries.map((module) => (
+                <Link
+                  key={module.id}
+                  href={`/modules/${module.id}`}
+                  className="block rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 transition hover:border-[var(--accent-soft)]"
+                >
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                        Unit {module.position + 1}{module.position + 1 === moduleSummaries.length ? " · Final unit" : ""}
+                      </p>
+                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                        {module.completedTasks === module.totalTasks && module.totalTasks > 0
+                          ? "Complete"
+                          : module.completedTasks > 0
+                          ? `${module.completedTasks} of ${module.totalTasks} fulfilled`
+                          : `${module.totalTasks} requirements`}
+                      </p>
+                    </div>
+                    <h3 className="text-lg font-semibold">{module.title}</h3>
+                    <p className="text-sm text-[var(--muted)]">
+                      {module.overview ?? ""}
+                    </p>
+                    {module.estimatedHours ? (
+                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                        Estimated reading: {module.estimatedHours.toFixed(1)} hours
+                      </p>
+                    ) : null}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)]">
+              No units of study have been established for this course.
+            </div>
+          )}
+        </section>
+
+        {course.syllabus ? (
+          <section className="space-y-3">
+            <h2 className="text-xl">Syllabus</h2>
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
+              <p className="text-sm text-[var(--muted)] whitespace-pre-wrap">{course.syllabus}</p>
+            </div>
+          </section>
+        ) : null}
+
+        {course.learning_outcomes ? (
+          <section className="space-y-3">
+            <h2 className="text-xl">Learning Outcomes</h2>
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
+              <p className="text-sm text-[var(--muted)] whitespace-pre-wrap">{course.learning_outcomes}</p>
+            </div>
+          </section>
+        ) : null}
+
+        <section className="space-y-3">
+          <h2 className="text-xl">Standing</h2>
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3 text-sm text-[var(--muted)]">
             {unreadReadings === 0 &&
             skippedReadings === 0 &&
             missingFinals === 0 &&
             !courseStanding.completion.thesisIncomplete ? (
-              <p className="text-sm font-semibold text-[var(--text)]">
-                This course is officially complete.
+              <p className="font-semibold text-[var(--text)]">
+                All requirements fulfilled. This course is officially complete.
               </p>
             ) : (
-              <div className="space-y-1">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Completion blockers
-                </p>
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                  <span>{completedTasks} of {totalTasks || 0} requirements fulfilled</span>
+                  <span>{finalAssignments} of {totalAssignments} final submissions</span>
+                </div>
                 <ul className="list-disc pl-5 text-[var(--muted)]">
                   {unreadReadings > 0 ? (
+                    <li>{unreadReadings} reading{unreadReadings === 1 ? "" : "s"} not complete</li>
+                  ) : null}
+                  {skippedReadings > 0 ? (
+                    <li>{skippedReadings} reading{skippedReadings === 1 ? "" : "s"} skipped (do not count)</li>
+                  ) : null}
+                  {missingFinals > 0 ? (
+                    <li>{missingFinals} assignment{missingFinals === 1 ? "" : "s"} missing final submission</li>
+                  ) : null}
+                  {draftAssignments > 0 ? (
+                    <li>{draftAssignments} assignment{draftAssignments === 1 ? "" : "s"} with draft only</li>
+                  ) : null}
+                  {courseStanding.completion.thesisIncomplete ? (
                     <li>
-                      {unreadReadings} reading{unreadReadings === 1 ? "" : "s"} not complete
+                      {courseStanding.thesis?.hasProject
+                        ? "Thesis milestones remain incomplete."
+                        : "No thesis project recorded for RSYN 720."}
                     </li>
                   ) : null}
-                    {skippedReadings > 0 ? (
-                      <li>
-                        {skippedReadings} reading
-                        {skippedReadings === 1 ? "" : "s"} skipped
-                        (do not count)
-                      </li>
-                    ) : null}
-                  {missingFinals > 0 ? (
-                    <li>
-                  {missingFinals} assignment{missingFinals === 1 ? "" : "s"} missing final submission
-                </li>
-              ) : null}
-              {draftAssignments > 0 ? (
-                <li>
-                  {draftAssignments} assignment{draftAssignments === 1 ? "" : "s"} with draft only
-                </li>
-              ) : null}
-              {courseStanding.completion.thesisIncomplete ? (
-                <li>
-                  {courseStanding.thesis?.hasProject
-                    ? "Thesis milestones remain incomplete."
-                    : "No thesis project recorded for RSYN 720."}
-                </li>
-              ) : null}
-            </ul>
-          </div>
-        )}
-          </div>
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold">Next Required Action</h2>
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-2 text-sm text-[var(--muted)]">
-            {nextModule ? (
-              <>
-                <p className="text-sm font-semibold text-[var(--text)]">
-                  Continue module {nextModule.position + 1}: {nextModule.title}
-                </p>
-                <p>
-                  This is the earliest incomplete module in the course sequence.
-                </p>
-                <Link
-                  href={`/modules/${nextModule.id}`}
-                  className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
-                >
-                  Go to module
-                </Link>
-              </>
-            ) : (
-              <p>All required modules are complete for this course.</p>
+                </ul>
+              </div>
             )}
           </div>
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-[2fr,1fr]">
-          <div className="space-y-6">
+        <section className="space-y-3">
+          <h2 className="text-xl">Course Details</h2>
+          <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Course Profile</h2>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2 text-sm text-[var(--muted)]">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.2em]">Code</p>
-                  <p>{course.code ?? "—"}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-[0.2em]">Status</p>
-                  <p>{course.status}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-[0.2em]">Domain</p>
-                  <p>
-                    {course.domain
-                      ? `${course.domain.code ? `${course.domain.code} — ` : ""}${course.domain.title}`
-                      : "—"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-[0.2em]">Department or Domain</p>
-                  <p>{course.department_or_domain ?? "—"}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-[0.2em]">Level</p>
-                  <p>{course.level ?? "—"}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-[0.2em]">Credits or Weight</p>
-                  <p>{course.credits_or_weight ?? "—"}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
-              <h2 className="text-lg font-semibold">Prerequisites</h2>
+              <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">Prerequisites</h3>
               {prerequisiteCourses.length ? (
                 <ul className="space-y-2 text-sm text-[var(--muted)]">
                   {prerequisiteCourses.map((prereq) => (
@@ -484,118 +484,52 @@ export default async function CoursePage({
                   ))}
                 </ul>
               ) : (
-                <p className="text-sm text-[var(--muted)]">No prerequisites.</p>
+                <p className="text-sm text-[var(--muted)]">None. This course may be taken first.</p>
               )}
-              <div className="text-sm text-[var(--muted)]">
-                <span className="font-semibold text-[var(--text)]">Readiness:</span>{" "}
-                {readinessStatus}
-                {unmetPrereqs.length ? (
-                  <span>
-                    {" "}
-                    · Blocked by{" "}
-                    {unmetPrereqs
-                      .map((course) =>
-                        course.code ? `${course.code} — ${course.title}` : course.title
-                      )
-                      .join(", ")}
-                  </span>
+              {unmetPrereqs.length ? (
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Prerequisites pending: {unmetPrereqs.map((c) => c.code ?? c.title).join(", ")}
+                </p>
+              ) : null}
+            </div>
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
+              <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">Catalog</h3>
+              <div className="space-y-1 text-sm text-[var(--muted)]">
+                {course.code ? <p>{course.code}</p> : null}
+                {course.level ? <p>{course.level}</p> : null}
+                {course.credits_or_weight ? <p>{course.credits_or_weight} credits</p> : null}
+                {course.domain ? (
+                  <p>{course.domain.title}</p>
+                ) : course.department_or_domain ? (
+                  <p>{course.department_or_domain}</p>
                 ) : null}
               </div>
             </div>
-
+          </div>
+          {requirementBlocks.length ? (
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
-              <h2 className="text-lg font-semibold">Requirement Blocks</h2>
-              {requirementBlocks.length ? (
-                <ul className="space-y-2 text-sm text-[var(--muted)]">
-                    {requirementBlocks.map((block) => (
-                      <li key={block.id} className="flex flex-wrap items-center gap-3">
-                        <span>
-                          {block.title}
-                        </span>
-                        {block.category ? (
-                          <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                            {block.category}
-                          </span>
-                        ) : null}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-[var(--muted)]">
-                  Not assigned to any requirement blocks.
-                </p>
-              )}
+              <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">Satisfies</h3>
+              <ul className="space-y-1 text-sm text-[var(--muted)]">
+                {requirementBlocks.map((block) => (
+                  <li key={block.id}>
+                    {block.title}
+                    {block.category ? ` (${block.category})` : ""}
+                  </li>
+                ))}
+              </ul>
               {course.program?.id ? (
                 <Link
                   href={`/programs/${course.program.id}/audit`}
                   className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
                 >
-                  View program audit
+                  Program audit
                 </Link>
               ) : null}
             </div>
-
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
-              <h2 className="text-lg font-semibold">Learning Outcomes</h2>
-              <p className="text-sm text-[var(--muted)] whitespace-pre-wrap">
-                {course.learning_outcomes ?? "No learning outcomes recorded."}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
-              <h2 className="text-lg font-semibold">Syllabus</h2>
-              <p className="text-sm text-[var(--muted)] whitespace-pre-wrap">
-                {course.syllabus ?? "No syllabus recorded."}
-              </p>
-            </div>
+          ) : null}
+          <div className="flex flex-wrap gap-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            <Link href={`/courses/${course.id}/dossier`}>Course dossier</Link>
           </div>
-
-          <div className="space-y-4" />
-        </section>
-
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Modules</h2>
-          </div>
-
-          {moduleSummaries.length ? (
-            <div className="space-y-4">
-              {moduleSummaries.map((module) => (
-                <div
-                  key={module.id}
-                  className="flex flex-col gap-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 md:flex-row md:items-center md:justify-between"
-                >
-                  <div className="space-y-2">
-                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                      Module {module.position + 1}
-                    </p>
-                    <Link
-                      href={`/modules/${module.id}`}
-                      className="text-lg font-semibold"
-                    >
-                      {module.title}
-                    </Link>
-                    <p className="text-sm text-[var(--muted)]">
-                      {module.overview ?? "No overview provided."}
-                    </p>
-                    <div className="flex flex-wrap gap-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                      <span>
-                        Progress {module.completedTasks}/{module.totalTasks}
-                      </span>
-                      <span>
-                        Reading hours {module.estimatedHours ? module.estimatedHours.toFixed(1) : "0"}
-                      </span>
-                    </div>
-                  </div>
-
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)]">
-              No modules added yet for this course.
-            </div>
-          )}
         </section>
       </div>
     </ProtectedShell>

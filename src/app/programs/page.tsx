@@ -49,7 +49,7 @@ export default async function ProgramsPage() {
                     </p>
                     <h3 className="text-lg font-semibold">{program.title}</h3>
                     <p className="text-sm text-[var(--muted)]">
-                      {program.description ?? "No description provided."}
+                      {program.description ?? ""}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
@@ -80,7 +80,7 @@ export default async function ProgramsPage() {
             </div>
           ) : (
             <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)]">
-              No programs yet. Create a program to begin structuring requirements.
+              No program enrollment on record.
             </div>
           )}
         </section>

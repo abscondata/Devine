@@ -71,6 +71,15 @@ export default async function ModulePage({
         .in("submission_id", finalSubmissionIds)
     : { data: [] };
 
+  // Count sibling modules for "Unit X of Y" display
+  const { count: siblingModuleCount } = module.course?.id
+    ? await supabase
+        .from("modules")
+        .select("id", { count: "exact", head: true })
+        .eq("course_id", module.course.id)
+    : { count: 0 };
+  const totalModules = siblingModuleCount ?? 0;
+
   const assignmentStatus = buildAssignmentStatusMap(submissions ?? [], critiques ?? []);
   const totalHours = (readings ?? []).reduce(
     (sum, reading) => sum + (reading.estimated_hours ?? 0),
@@ -101,182 +110,122 @@ export default async function ModulePage({
           >
             {module.course?.title ?? "Course"}
           </Link>
-          <div className="flex items-center justify-between gap-4">
-            <div className="space-y-2">
-              <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
-                {module.course?.program?.title ?? "Program"}
-              </p>
-              <h1 className="text-3xl font-semibold">{module.title}</h1>
+          <div className="space-y-2">
+            <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
+              {module.course?.program?.title ?? "Program"} · Unit {module.position + 1}{totalModules ? ` of ${totalModules}` : ""}
+            </p>
+            <h1 className="text-3xl">{module.title}</h1>
+            {module.overview ? (
               <p className="text-sm text-[var(--muted)]">
-                {module.overview ?? "No module overview yet."}
+                {module.overview}
               </p>
-            </div>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-            <span>
-              Progress {completedTasks}/{totalTasks || 0}
-            </span>
-            <span>
-              Estimated reading hours {totalHours ? totalHours.toFixed(1) : "0"}
-            </span>
-            <span>
-              Finals {finalAssignments}/{totalAssignments}
-            </span>
-            {draftAssignments ? <span>Drafts {draftAssignments}</span> : null}
-            {finalAssignments ? (
-              <span>
-                Critiqued {critiquedFinals}/{finalAssignments}
-              </span>
+            <span>{completedTasks} of {totalTasks || 0} requirements fulfilled</span>
+            {totalHours ? (
+              <span>Estimated reading: {totalHours.toFixed(1)} hours</span>
             ) : null}
+            <span>{finalAssignments} of {totalAssignments} final submissions</span>
           </div>
         </header>
 
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold">Official Completion</h2>
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3 text-sm text-[var(--muted)]">
-            <p>
-              Official completion requires all readings marked complete (skipped
-              readings do not count) and final submissions for every assignment.
-              Critiques are recommended but do not determine completion.
+        {nextAction ? (
+          <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-2">
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+              Next obligation
             </p>
-            {unreadReadings === 0 && skippedReadings === 0 && missingFinals === 0 ? (
-              <p className="text-sm font-semibold text-[var(--text)]">
-                This module is officially complete.
-              </p>
-            ) : (
-              <div className="space-y-1">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Completion blockers
-                </p>
-                <ul className="list-disc pl-5 text-[var(--muted)]">
-                  {unreadReadings > 0 ? (
-                    <li>{unreadReadings} reading{unreadReadings === 1 ? "" : "s"} not complete</li>
-                  ) : null}
-                  {skippedReadings > 0 ? (
-                    <li>{skippedReadings} reading{skippedReadings === 1 ? "" : "s"} skipped (do not count)</li>
-                  ) : null}
-                  {missingFinals > 0 ? (
-                    <li>{missingFinals} assignment{missingFinals === 1 ? "" : "s"} missing final submission</li>
-                  ) : null}
-                  {draftAssignments > 0 ? (
-                    <li>{draftAssignments} assignment{draftAssignments === 1 ? "" : "s"} with draft only</li>
-                  ) : null}
-                </ul>
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold">Next Required Action</h2>
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-2 text-sm text-[var(--muted)]">
-            {nextAction ? (
-              <>
-                <p className="text-sm font-semibold text-[var(--text)]">
-                  {nextAction.title}
-                </p>
-                <p>{nextAction.reason}</p>
-              </>
-            ) : (
-              <p>All required work in this module is complete.</p>
-            )}
-          </div>
-        </section>
+            <p className="text-sm font-semibold text-[var(--text)]">
+              {nextAction.title}
+            </p>
+            <p className="text-sm text-[var(--muted)]">{nextAction.reason}</p>
+          </section>
+        ) : unreadReadings === 0 && missingFinals === 0 ? (
+          <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
+            <p className="text-sm font-semibold text-[var(--text)]">
+              All required work in this unit is complete.
+            </p>
+          </section>
+        ) : null}
 
         <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Readings</h2>
-          </div>
+          <h2 className="text-xl">Assigned Readings</h2>
 
           {readings?.length ? (
-            <div className="space-y-4">
-              {readings.map((reading) => {
-                const meta = [
-                  reading.author,
-                  reading.source_type,
-                  reading.primary_or_secondary,
-                  reading.tradition_or_era,
-                  reading.pages_or_length,
-                ]
-                  .filter(Boolean)
-                  .join(" · ");
-
-                return (
-                  <div
-                    key={reading.id}
-                    className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3"
-                  >
-                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                      <div>
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
+              {readings.map((reading) => (
+                <div key={reading.id} className="p-5 space-y-3">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                    <div className="space-y-1">
+                      <h3 className="text-base font-semibold">{reading.title}</h3>
+                      <p className="text-sm text-[var(--muted)]">
+                        {[reading.author, reading.tradition_or_era, reading.pages_or_length]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                      {reading.source_type ? (
                         <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                          Reading {reading.position + 1}
+                          {reading.source_type}{reading.primary_or_secondary ? ` · ${reading.primary_or_secondary}` : ""}
+                          {reading.estimated_hours ? ` · ${reading.estimated_hours}h` : ""}
                         </p>
-                        <h3 className="text-lg font-semibold">{reading.title}</h3>
-                        {meta ? (
-                          <p className="text-sm text-[var(--muted)]">{meta}</p>
-                        ) : null}
-                      </div>
-                      <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                        <span>Status {reading.status.replace(/_/g, " ")}</span>
-                      </div>
+                      ) : null}
+                    </div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] md:text-right shrink-0">
+                      {reading.status === "complete" ? "Complete" : reading.status.replace(/_/g, " ")}
+                    </p>
                   </div>
                   {isReadingSkipped(reading.status) ? (
                     <p className="text-xs text-[var(--muted)]">
-                      Administratively skipped (does not count toward completion).
+                      Skipped (does not count toward completion).
                     </p>
                   ) : null}
-
-                    {reading.reference_url_or_citation ? (
-                      <p className="text-sm text-[var(--muted)]">
-                        Reference: {reading.reference_url_or_citation}
-                      </p>
-                    ) : null}
-                    {reading.notes ? (
-                      <p className="text-sm text-[var(--muted)]">{reading.notes}</p>
-                    ) : null}
-
-                    <form
-                      action={updateReadingStatus}
-                      className="flex flex-wrap items-center gap-3"
+                  {reading.reference_url_or_citation ? (
+                    <p className="text-xs text-[var(--muted)]">
+                      {reading.reference_url_or_citation}
+                    </p>
+                  ) : null}
+                  {reading.notes ? (
+                    <p className="text-sm text-[var(--muted)]">{reading.notes}</p>
+                  ) : null}
+                  <form
+                    action={updateReadingStatus}
+                    className="flex flex-wrap items-center gap-3"
+                  >
+                    <input type="hidden" name="readingId" value={reading.id} />
+                    <input type="hidden" name="moduleId" value={module.id} />
+                    <label className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                      Mark as
+                    </label>
+                    <select
+                      name="status"
+                      defaultValue={reading.status}
+                      className="rounded-md border border-[var(--border)] bg-[var(--surface-muted)] px-2 py-1.5 text-sm"
                     >
-                      <input type="hidden" name="readingId" value={reading.id} />
-                      <input type="hidden" name="moduleId" value={module.id} />
-                      <label className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                        Update status
-                      </label>
-                      <select
-                        name="status"
-                        defaultValue={reading.status}
-                        className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
-                      >
-                        {readingStatuses.map((status) => (
-                          <option key={status} value={status}>
-                            {status.replace(/_/g, " ")}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="submit"
-                        className="rounded-md border border-[var(--border)] px-3 py-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
-                      >
-                        Save
-                      </button>
-                    </form>
-                  </div>
-                );
-              })}
+                      {readingStatuses.map((status) => (
+                        <option key={status} value={status}>
+                          {status.replace(/_/g, " ")}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="submit"
+                      className="rounded-md border border-[var(--border)] px-2 py-1.5 text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
+                    >
+                      Save
+                    </button>
+                  </form>
+                </div>
+              ))}
             </div>
           ) : (
-            <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)]">
-              No readings assigned to this module yet.
-            </div>
+            <p className="text-sm text-[var(--muted)]">
+              No readings have been assigned for this unit.
+            </p>
           )}
         </section>
 
         <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Assignments</h2>
-          </div>
+          <h2 className="text-xl">Written Work</h2>
 
           {assignments?.length ? (
             <div className="space-y-4">
@@ -320,7 +269,7 @@ export default async function ModulePage({
             </div>
           ) : (
             <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)]">
-              No assignments assigned to this module yet.
+              No written work has been assigned for this unit.
             </div>
           )}
         </section>

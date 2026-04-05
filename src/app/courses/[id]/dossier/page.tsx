@@ -239,8 +239,7 @@ export default async function CourseDossierPage({
             </div>
           </div>
           <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-            Progress {completedTasks}/{totalTasks} · Finals {finalAssignments}/{totalAssignments}
-            {draftAssignments ? ` · Drafts ${draftAssignments}` : ""}
+            {completedTasks} of {totalTasks} requirements fulfilled · {finalAssignments} of {totalAssignments} final submissions
           </div>
             {requirementBlocks.length ? (
             <div className="pt-2 text-sm text-[var(--muted)]">
@@ -330,11 +329,10 @@ export default async function CourseDossierPage({
                     </p>
                     <h3 className="text-lg font-semibold">{module.title}</h3>
                     <p className="text-sm text-[var(--muted)]">
-                      {module.overview ?? "No overview recorded."}
+                      {module.overview ?? ""}
                     </p>
                     <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                      Progress {module.standing.completion.completedTasks}/
-                      {module.standing.completion.totalTasks}
+                      {module.standing.completion.completedTasks} of {module.standing.completion.totalTasks} requirements fulfilled
                     </p>
                   </div>
 

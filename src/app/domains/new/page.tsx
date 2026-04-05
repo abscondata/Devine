@@ -2,7 +2,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createDomain } from "@/lib/actions";
-import { ProtectedShell } from "@/components/protected-shell";
+import { requireAdminAccess } from "@/lib/admin-gate";
+import { AdminShell } from "@/components/admin-shell";
 
 const domainStatuses = ["active", "inactive", "archived"];
 
@@ -20,10 +21,12 @@ export default async function NewDomainPage({
     redirect("/login");
   }
 
+  await requireAdminAccess(supabase, user.id);
+
   const { error } = await searchParams;
 
   return (
-    <ProtectedShell userEmail={user.email ?? null}>
+    <AdminShell userEmail={user.email ?? null}>
       <div className="max-w-3xl space-y-8">
         <header className="space-y-2">
           <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
@@ -106,6 +109,6 @@ export default async function NewDomainPage({
           </div>
         </form>
       </div>
-    </ProtectedShell>
+    </AdminShell>
   );
 }

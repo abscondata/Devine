@@ -14,6 +14,7 @@ import {
   STRUCTURE_POSITION_ERROR,
   validateStructurePosition,
 } from "@/lib/module-structure";
+import { requireAdminAccess } from "@/lib/admin-gate";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -139,6 +140,14 @@ export async function createProgram(formData: FormData) {
     redirect("/login");
   }
 
+  // Allow first program creation for bootstrapping; gate all subsequent ones
+  const { count } = await supabase
+    .from("programs")
+    .select("id", { count: "exact", head: true });
+  if (count && count > 0) {
+    await requireAdminAccess(supabase, user.id);
+  }
+
   const { data: program, error } = await supabase
     .from("programs")
     .insert({
@@ -180,6 +189,8 @@ export async function createDomain(formData: FormData) {
   if (!user) {
     redirect("/login");
   }
+
+  await requireAdminAccess(supabase, user.id);
 
   const { error } = await supabase.from("domains").insert({
     created_by: user.id,
@@ -227,6 +238,8 @@ export async function createCourse(formData: FormData) {
   if (!user) {
     redirect("/login");
   }
+
+  await requireAdminAccess(supabase, user.id);
 
   const sequenceValidation = validateSequencePosition(formData.get("sequencePosition"));
   if (sequenceValidation.error) {
@@ -324,6 +337,8 @@ export async function updateCourse(formData: FormData) {
     redirect("/login");
   }
 
+  await requireAdminAccess(supabase, user.id);
+
   if (!courseId) {
     redirect("/dashboard?error=" + encodeMessage("Course not found."));
   }
@@ -418,6 +433,8 @@ export async function createModule(formData: FormData) {
     redirect("/login");
   }
 
+  await requireAdminAccess(supabase, user.id);
+
   if (positionValidation.error || positionValue === null) {
     redirect(`/modules/new?error=${encodeMessage(STRUCTURE_POSITION_ERROR)}`);
   }
@@ -478,6 +495,8 @@ export async function updateModule(formData: FormData) {
   if (!user) {
     redirect("/login");
   }
+
+  await requireAdminAccess(supabase, user.id);
 
   if (!moduleId) {
     redirect(`/dashboard?error=${encodeMessage("Module not found.")}`);
@@ -541,6 +560,8 @@ export async function reorderModule(formData: FormData) {
     redirect("/login");
   }
 
+  await requireAdminAccess(supabase, user.id);
+
   const { data: moduleRecord, error: moduleError } = await supabase
     .from("modules")
     .select("id, course_id, position")
@@ -602,6 +623,8 @@ export async function createAssignment(formData: FormData) {
     redirect("/login");
   }
 
+  await requireAdminAccess(supabase, user.id);
+
   if (assignmentTypeValidation.error || !assignmentType) {
     redirect(`/assignments/new?error=${encodeMessage(ASSIGNMENT_TYPE_ERROR)}`);
   }
@@ -653,6 +676,8 @@ export async function updateAssignment(formData: FormData) {
   if (!user) {
     redirect("/login");
   }
+
+  await requireAdminAccess(supabase, user.id);
 
   if (!assignmentId) {
     redirect(`/dashboard?error=${encodeMessage("Assignment not found.")}`);
@@ -714,6 +739,8 @@ export async function updateReading(formData: FormData) {
   if (!user) {
     redirect("/login");
   }
+
+  await requireAdminAccess(supabase, user.id);
 
   if (!readingId) {
     redirect(`/dashboard?error=${encodeMessage("Reading not found.")}`);
@@ -799,6 +826,8 @@ export async function createReading(formData: FormData) {
   if (!user) {
     redirect("/login");
   }
+
+  await requireAdminAccess(supabase, user.id);
 
   if (positionValidation.error || positionValue === null) {
     redirect(`/readings/new?error=${encodeMessage(STRUCTURE_POSITION_ERROR)}`);
@@ -1073,6 +1102,8 @@ export async function createConcept(formData: FormData) {
     redirect("/login");
   }
 
+  await requireAdminAccess(supabase, user.id);
+
   const { error } = await supabase.from("concepts").insert({
     title,
     type,
@@ -1123,6 +1154,8 @@ export async function createRequirementBlock(formData: FormData) {
   if (!user) {
     redirect("/login");
   }
+
+  await requireAdminAccess(supabase, user.id);
 
   const { data: latestBlock } = await supabase
     .from("requirement_blocks")
@@ -1192,6 +1225,8 @@ export async function updateRequirementBlock(formData: FormData) {
   if (!user) {
     redirect("/login");
   }
+
+  await requireAdminAccess(supabase, user.id);
 
   const { error } = await supabase
     .from("requirement_blocks")

@@ -1,4 +1,4 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ProtectedShell } from "@/components/protected-shell";
@@ -15,7 +15,7 @@ export default async function ReadingsIndexPage() {
 
   const { data: readings } = await supabase
     .from("readings")
-    .select("id, module_id, title, status, position")
+    .select("id, module_id, title, author, status, position")
     .order("position", { ascending: true });
 
   const moduleIds = Array.from(
@@ -47,6 +47,14 @@ export default async function ReadingsIndexPage() {
     (courses ?? []).map((course) => [course.id, course])
   );
 
+  // Group readings by course
+  type ReadingRow = NonNullable<typeof readings>[number];
+  type CourseRow = NonNullable<typeof courses>[number];
+  const readingsByCourse = new Map<
+    string,
+    { course: CourseRow; readings: ReadingRow[] }
+  >();
+
   const sortedReadings = (readings ?? []).slice().sort((a, b) => {
     const moduleA = modulesById.get(a.module_id);
     const moduleB = modulesById.get(b.module_id);
@@ -57,73 +65,86 @@ export default async function ReadingsIndexPage() {
     if (courseOrderA !== courseOrderB) return courseOrderA - courseOrderB;
     const courseTitleA = courseA?.title ?? "";
     const courseTitleB = courseB?.title ?? "";
-    if (courseTitleA !== courseTitleB) {
-      return courseTitleA.localeCompare(courseTitleB);
-    }
+    if (courseTitleA !== courseTitleB) return courseTitleA.localeCompare(courseTitleB);
     const moduleOrderA = moduleA?.position ?? 9999;
     const moduleOrderB = moduleB?.position ?? 9999;
     if (moduleOrderA !== moduleOrderB) return moduleOrderA - moduleOrderB;
     return (a.position ?? 0) - (b.position ?? 0);
   });
 
+  sortedReadings.forEach((reading) => {
+    const module = modulesById.get(reading.module_id);
+    const course = module ? coursesById.get(module.course_id) : null;
+    if (!course) return;
+    const existing = readingsByCourse.get(course.id);
+    if (existing) {
+      existing.readings.push(reading);
+    } else {
+      readingsByCourse.set(course.id, { course, readings: [reading] });
+    }
+  });
+
+  // Order course groups by sequence_position
+  const orderedCourseGroups = Array.from(readingsByCourse.values()).sort(
+    (a, b) => (a.course.sequence_position ?? 9999) - (b.course.sequence_position ?? 9999)
+  );
+
+  const totalReadings = sortedReadings.length;
+  const completeReadings = sortedReadings.filter((r) => r.status === "complete").length;
+
   return (
     <ProtectedShell userEmail={user.email ?? null}>
       <div className="space-y-10">
         <header className="space-y-2">
           <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
-            Reading Ledger
+            Reading Record
           </p>
-          <h1 className="text-3xl font-semibold">Readings</h1>
+          <h1 className="text-3xl">Assigned Readings</h1>
           <p className="text-sm text-[var(--muted)]">
-            Canonical reading list and completion status.
+            {totalReadings} readings across the curriculum{completeReadings > 0 ? ` · ${completeReadings} complete` : ""}.
           </p>
         </header>
 
-        <section className="space-y-4">
-          {sortedReadings.length ? (
-            <div className="space-y-3">
-              {sortedReadings.map((reading) => {
-                const module = modulesById.get(reading.module_id);
-                const course = module ? coursesById.get(module.course_id) : null;
-
-                return (
-                  <div
-                    key={reading.id}
-                    className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-2"
-                  >
-                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                      {course?.code ? `${course.code} — ` : ""}
-                      {course?.title ?? "Course"}
-                    </p>
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <h2 className="text-lg font-semibold">{reading.title}</h2>
-                        <p className="text-sm text-[var(--muted)]">
-                          {module?.title ?? "Module"} · Reading {reading.position + 1}
+        {orderedCourseGroups.length ? (
+          orderedCourseGroups.map(({ course, readings: courseReadings }) => (
+            <section key={course.id} className="space-y-3">
+              <div className="space-y-1">
+                <Link
+                  href={`/courses/${course.id}`}
+                  className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] hover:text-[var(--text)]"
+                >
+                  {course.code ?? ""}
+                </Link>
+                <h2 className="text-lg">{course.title}</h2>
+              </div>
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
+                {courseReadings.map((reading) => {
+                  const module = modulesById.get(reading.module_id);
+                  return (
+                    <div
+                      key={reading.id}
+                      className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"
+                    >
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-semibold">{reading.title}</p>
+                        <p className="text-xs text-[var(--muted)]">
+                          {[reading.author, module?.title].filter(Boolean).join(" · ")}
                         </p>
                       </div>
-                      <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                        Status {reading.status.replace(/_/g, " ")}
-                      </span>
+                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] shrink-0">
+                        {reading.status === "complete" ? "Complete" : reading.status.replace(/_/g, " ")}
+                      </p>
                     </div>
-                    {module?.id ? (
-                      <Link
-                        href={`/modules/${module.id}`}
-                        className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
-                      >
-                        View module
-                      </Link>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)]">
-              No readings found.
-            </div>
-          )}
-        </section>
+                  );
+                })}
+              </div>
+            </section>
+          ))
+        ) : (
+          <p className="text-sm text-[var(--muted)]">
+            No readings have been assigned.
+          </p>
+        )}
       </div>
     </ProtectedShell>
   );

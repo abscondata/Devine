@@ -14,6 +14,7 @@ import {
   buildMissingThesisSummary,
   buildThesisSummaryByCourseId,
 } from "@/lib/thesis-governance";
+import { checkAdminAccess } from "@/lib/admin-gate";
 import { ProtectedShell } from "@/components/protected-shell";
 
 type CourseStatus = "completed" | "in_progress" | "not_started";
@@ -54,6 +55,8 @@ export default async function ProgramAuditPage({
   if (!user) {
     redirect("/login");
   }
+
+  const isAdmin = await checkAdminAccess(supabase, user.id);
 
   const { data: program } = await supabase
     .from("programs")
@@ -378,10 +381,10 @@ export default async function ProgramAuditPage({
       };
       const readiness =
         readinessState.status === "completed"
-          ? "Completed"
+          ? "Complete"
           : readinessState.status === "ready"
-          ? "Ready now"
-          : "Not yet";
+          ? "Prerequisites satisfied"
+          : "Prerequisites pending";
       return {
         ...course,
         ...progress,
@@ -454,7 +457,7 @@ export default async function ProgramAuditPage({
             </p>
             <h1 className="text-3xl font-semibold">{program.title}</h1>
             <p className="text-sm text-[var(--muted)]">
-              {program.description ?? "No program description."}
+              {program.description ?? ""}
             </p>
           </div>
         </header>
@@ -484,7 +487,7 @@ export default async function ProgramAuditPage({
                     <span>
                       {item.course
                         ? `${item.code} — ${item.course.title}`
-                        : `${item.code} — Not yet created`}
+                        : `${item.code} — Not yet established`}
                     </span>
                   </li>
                 ))}
@@ -570,12 +573,14 @@ export default async function ProgramAuditPage({
           </div>
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold">Requirement Blocks</h2>
-            <Link
-              href={`/programs/${program.id}/requirements/new`}
-              className="text-sm text-[var(--muted)]"
-            >
-              Add requirement block
-            </Link>
+            {isAdmin ? (
+              <Link
+                href={`/programs/${program.id}/requirements/new`}
+                className="text-sm text-[var(--muted)]"
+              >
+                Add requirement block
+              </Link>
+            ) : null}
           </div>
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm text-[var(--muted)] space-y-2">
             <p>
@@ -613,7 +618,7 @@ export default async function ProgramAuditPage({
                               </p>
                               <h4 className="text-lg font-semibold">{block.title}</h4>
                               <p className="text-sm text-[var(--muted)]">
-                                {block.description ?? "No description."}
+                                {block.description ?? ""}
                               </p>
                             </div>
                             <div className="text-right space-y-1">
@@ -621,12 +626,14 @@ export default async function ProgramAuditPage({
                                 Status
                               </p>
                               <p className="text-sm font-semibold capitalize">{status}</p>
-                              <Link
-                                href={`/programs/${program.id}/requirements/${block.id}/edit`}
-                                className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
-                              >
-                                Edit block
-                              </Link>
+                              {isAdmin ? (
+                                <Link
+                                  href={`/programs/${program.id}/requirements/${block.id}/edit`}
+                                  className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
+                                >
+                                  Edit block
+                                </Link>
+                              ) : null}
                             </div>
                           </div>
 
@@ -661,7 +668,7 @@ export default async function ProgramAuditPage({
                                     </span>
                                     <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                                       {course.readiness}
-                                      {course.readiness === "Not yet" &&
+                                      {course.readiness === "Prerequisites pending" &&
                                       course.unmetPrereqs?.length ? (
                                         <>
                                           {" "}
@@ -677,30 +684,16 @@ export default async function ProgramAuditPage({
                                       ) : null}
                                     </span>
                                     <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                                      Finals {course.finalAssignments}/{course.totalAssignments}
+                                      {course.finalAssignments} of {course.totalAssignments} final submissions
                                     </span>
-                                    {course.draftAssignments ? (
+                                    {course.status !== "completed" && course.unreadReadings > 0 ? (
                                       <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                                        Drafts {course.draftAssignments}
+                                        {course.unreadReadings} reading{course.unreadReadings === 1 ? "" : "s"} remaining
                                       </span>
                                     ) : null}
-                                    {course.finalAssignments ? (
+                                    {course.status !== "completed" && course.missingFinals > 0 ? (
                                       <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                                        Critiqued {course.critiquedFinals}/{course.finalAssignments}
-                                      </span>
-                                    ) : null}
-                                    {course.status !== "completed" ? (
-                                      <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                                        Blockers
-                                        {course.unreadReadings > 0
-                                          ? ` ${course.unreadReadings} reading${course.unreadReadings === 1 ? "" : "s"}`
-                                          : ""}
-                                        {course.missingFinals > 0
-                                          ? ` ${course.missingFinals} final${course.missingFinals === 1 ? "" : "s"}`
-                                          : ""}
-                                        {course.skippedReadings > 0
-                                          ? ` ${course.skippedReadings} skipped`
-                                          : ""}
+                                        {course.missingFinals} final{course.missingFinals === 1 ? "" : "s"} outstanding
                                       </span>
                                     ) : null}
                                   </li>
@@ -721,7 +714,7 @@ export default async function ProgramAuditPage({
             </div>
           ) : (
             <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)]">
-              No requirement blocks yet. Add the first block to begin auditing.
+              No requirement blocks have been established for this program.
             </div>
           )}
         </section>

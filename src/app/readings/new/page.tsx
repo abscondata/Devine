@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createReading } from "@/lib/actions";
 import { READING_STATUS_ALLOWED } from "@/lib/academic-standing";
-import { ProtectedShell } from "@/components/protected-shell";
+import { requireAdminAccess } from "@/lib/admin-gate";
+import { AdminShell } from "@/components/admin-shell";
 
 const readingStatuses = READING_STATUS_ALLOWED;
 
@@ -20,6 +21,8 @@ export default async function NewReadingPage({
   if (!user) {
     redirect("/login");
   }
+
+  await requireAdminAccess(supabase, user.id);
 
   const { error, moduleId } = await searchParams;
 
@@ -41,7 +44,7 @@ export default async function NewReadingPage({
   const defaultPosition = (latestReading?.position ?? -1) + 1;
 
   return (
-    <ProtectedShell userEmail={user.email ?? null}>
+    <AdminShell userEmail={user.email ?? null}>
       <div className="max-w-3xl space-y-8">
         <header className="space-y-2">
           <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
@@ -240,6 +243,6 @@ export default async function NewReadingPage({
           </form>
         )}
       </div>
-    </ProtectedShell>
+    </AdminShell>
   );
 }

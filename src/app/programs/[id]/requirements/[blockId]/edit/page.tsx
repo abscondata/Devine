@@ -2,7 +2,8 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { updateRequirementBlock } from "@/lib/actions";
-import { ProtectedShell } from "@/components/protected-shell";
+import { requireAdminAccess } from "@/lib/admin-gate";
+import { AdminShell } from "@/components/admin-shell";
 
 export default async function EditRequirementBlockPage({
   params,
@@ -22,6 +23,8 @@ export default async function EditRequirementBlockPage({
   if (!user) {
     redirect("/login");
   }
+
+  await requireAdminAccess(supabase, user.id);
 
   const { data: program } = await supabase
     .from("programs")
@@ -62,7 +65,7 @@ export default async function EditRequirementBlockPage({
   );
 
   return (
-    <ProtectedShell userEmail={user.email ?? null}>
+    <AdminShell userEmail={user.email ?? null}>
       <div className="max-w-4xl space-y-8">
         <header className="space-y-2">
           <Link
@@ -206,6 +209,6 @@ export default async function EditRequirementBlockPage({
           </div>
         </form>
       </div>
-    </ProtectedShell>
+    </AdminShell>
   );
 }

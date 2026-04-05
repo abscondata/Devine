@@ -323,8 +323,8 @@ where code = 'PHIL 501';
   update courses
   set
     description = 'Fundamental theology grounded in revelation and faith, ordering Scripture, Tradition, and Magisterium; builds on philosophical foundations and prepares the ecclesial and conciliar sequence.',
-    learning_outcomes = 'Explain Catholic doctrine of revelation and faith; distinguish Scripture and Tradition as sources of theology; evaluate patristic witness to the rule of faith; articulate the Magisterium''s role and a disciplined theological method.',
-    syllabus = 'Unit 1: Revelation and the act of faith (Dei Verbum, Dei Filius, CCC).\nUnit 2: Scripture, Tradition, and the rule of faith (Dei Verbum 7-16, Irenaeus).\nUnit 3: Magisterium and theological method (Dei Verbum 10, Lumen Gentium 25, Donum Veritatis).\nAssessment: one doctrinal reflection, one exegesis, and one magisterial-method analysis grounded in primary texts.'
+    learning_outcomes = 'Explain Catholic doctrine of revelation and faith; distinguish Scripture and Tradition as sources of theology; evaluate patristic witness to the rule of faith; articulate the Magisterium''s role and a disciplined theological method; analyze the act of faith as both reasonable and supernatural in light of Aquinas and magisterial teaching.',
+    syllabus = 'Unit 1: Revelation and the act of faith (Dei Verbum, Dei Filius, CCC).\nUnit 2: Scripture, Tradition, and the rule of faith (Dei Verbum 7-16, Irenaeus).\nUnit 3: Magisterium and theological method (Dei Verbum 10, Lumen Gentium 25, Donum Veritatis).\nUnit 4: The act of faith and the obedience of reason (Aquinas II-II q.1-2; Dei Filius ch. 3; CCC 142-175).\nAssessment: one doctrinal reflection, one exegesis, one magisterial-method analysis, and one synthesis essay grounded in primary texts.'
 where code = 'THEO 510';
 
   update courses
@@ -6604,7 +6604,8 @@ cross join actor
 cross join (values
   ('Revelation and the Act of Faith', 'Revelation, faith, and the divine initiative in Catholic theology.', 0),
   ('Tradition, Scripture, and the Rule of Faith', 'Scripture and Tradition as the sources of theology.', 1),
-  ('Magisterium and Theological Method', 'Authority, teaching office, and the discipline of theology.', 2)
+  ('Magisterium and Theological Method', 'Authority, teaching office, and the discipline of theology.', 2),
+  ('The Act of Faith and the Obedience of Reason', 'The nature of faith as intellectual assent under grace, the obedience of reason, and the relation of philosophical preparation to theological reception.', 3)
 ) as seed(title, overview, position)
 where not exists (
   select 1 from modules m where m.course_id = course.id and m.title = seed.title
@@ -6640,6 +6641,14 @@ module_3 as (
   where c.code = 'THEO 510'
     and m.title = 'Magisterium and Theological Method'
   limit 1
+),
+module_4 as (
+  select m.id
+  from modules m
+  join courses c on c.id = m.course_id
+  where c.code = 'THEO 510'
+    and m.title = 'The Act of Faith and the Obedience of Reason'
+  limit 1
 )
 insert into readings (
   module_id,
@@ -6667,7 +6676,10 @@ cross join (
     ((select id from module_2), 'Against Heresies III.1-3 (selections)', 'Irenaeus of Lyons', 'Primary text', 'Primary', 'Patristic', 'III.1-3', 2, 'Irenaeus, Against Heresies, Book III.', 2),
     ((select id from module_3), 'Dei Verbum 10', 'Second Vatican Council', 'Magisterial text', 'Primary', 'Modern', 'DV 10', 0.5, 'Dei Verbum, Vatican II, section 10.', 0),
     ((select id from module_3), 'Lumen Gentium 25', 'Second Vatican Council', 'Magisterial text', 'Primary', 'Modern', 'LG 25', 0.5, 'Lumen Gentium, Vatican II, section 25.', 1),
-    ((select id from module_3), 'Donum Veritatis (selections)', 'Congregation for the Doctrine of the Faith', 'Magisterial text', 'Primary', 'Modern', 'Sections 16-23', 1, 'CDF, Donum Veritatis, sections 16-23.', 2)
+    ((select id from module_3), 'Donum Veritatis (selections)', 'Congregation for the Doctrine of the Faith', 'Magisterial text', 'Primary', 'Modern', 'Sections 16-23', 1, 'CDF, Donum Veritatis, sections 16-23.', 2),
+    ((select id from module_4), 'Summa Theologiae II-II, q.1, a.1-5; q.2, a.1-3', 'Thomas Aquinas', 'Primary text', 'Primary', 'Medieval', 'ST II-II q.1 a.1-5; q.2 a.1-3', 2.5, 'Aquinas, Summa Theologiae II-II, q.1, a.1-5; q.2, a.1-3.', 0),
+    ((select id from module_4), 'Dei Filius (chapter 3: On Faith)', 'First Vatican Council', 'Magisterial text', 'Primary', 'Modern', 'Chapter 3', 1, 'Dei Filius, Vatican I, ch. 3.', 1),
+    ((select id from module_4), 'Catechism of the Catholic Church 142-175', 'Catechism of the Catholic Church', 'Magisterial text', 'Primary', 'Modern', 'CCC 142-175', 1.5, 'Catechism of the Catholic Church, 142-175.', 2)
 ) as seed(module_id, title, author, source_type, primary_or_secondary, tradition_or_era, pages_or_length, estimated_hours, reference_url_or_citation, position)
 where module_id is not null
   and not exists (
@@ -6705,6 +6717,14 @@ module_3 as (
   where c.code = 'THEO 510'
     and m.title = 'Magisterium and Theological Method'
   limit 1
+),
+module_4 as (
+  select m.id
+  from modules m
+  join courses c on c.id = m.course_id
+  where c.code = 'THEO 510'
+    and m.title = 'The Act of Faith and the Obedience of Reason'
+  limit 1
 )
 insert into assignments (
   module_id,
@@ -6719,7 +6739,8 @@ cross join (
   values
     ((select id from module_1), 'Reflection: Revelation and Faith', 'Write 900-1200 words explaining the Catholic understanding of revelation and the act of faith. Use Dei Verbum and Dei Filius as primary sources, with explicit citations.', 'essay'),
     ((select id from module_2), 'Exegesis: Tradition and Scripture', 'Write 900-1200 words analyzing the relationship between Scripture and Tradition in Dei Verbum 7-16. Incorporate Irenaeus (Against Heresies III) and the Catechism 74-100.', 'exegesis'),
-    ((select id from module_3), 'Analysis: Magisterium and Theological Method', 'Write 900-1200 words explaining the authority of the Magisterium and its role in theological method. Engage Dei Verbum 10, Lumen Gentium 25, and Donum Veritatis with explicit citations.', 'analysis')
+    ((select id from module_3), 'Analysis: Magisterium and Theological Method', 'Write 900-1200 words explaining the authority of the Magisterium and its role in theological method. Engage Dei Verbum 10, Lumen Gentium 25, and Donum Veritatis with explicit citations.', 'analysis'),
+    ((select id from module_4), 'Essay: The Act of Faith and the Obedience of Reason', 'Write 900-1200 words explaining the Catholic understanding of the act of faith as both reasonable and supernatural. Engage Aquinas (Summa Theologiae II-II, q.1, a.1-5; q.2, a.1-3), Dei Filius ch. 3, and CCC 142-175 with explicit citations. Show how the philosophical foundations established in PHIL 501 prepare for but do not determine the act of faith.', 'essay')
 ) as seed(module_id, title, instructions, assignment_type)
 where module_id is not null
   and not exists (

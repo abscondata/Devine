@@ -2,7 +2,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createConcept } from "@/lib/actions";
-import { ProtectedShell } from "@/components/protected-shell";
+import { requireAdminAccess } from "@/lib/admin-gate";
+import { AdminShell } from "@/components/admin-shell";
 
 const conceptTypes = [
   "term",
@@ -30,6 +31,8 @@ export default async function NewConceptPage({
     redirect("/login");
   }
 
+  await requireAdminAccess(supabase, user.id);
+
   const { error } = await searchParams;
 
   const { data: courses } = await supabase
@@ -43,7 +46,7 @@ export default async function NewConceptPage({
     .order("title");
 
   return (
-    <ProtectedShell userEmail={user.email ?? null}>
+    <AdminShell userEmail={user.email ?? null}>
       <div className="max-w-4xl space-y-8">
         <header className="space-y-2">
           <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
@@ -168,6 +171,6 @@ export default async function NewConceptPage({
           </div>
         </form>
       </div>
-    </ProtectedShell>
+    </AdminShell>
   );
 }

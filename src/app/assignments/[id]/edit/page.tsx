@@ -3,7 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { updateAssignment } from "@/lib/actions";
 import { ASSIGNMENT_TYPE_ALLOWED } from "@/lib/assignment-structure";
-import { ProtectedShell } from "@/components/protected-shell";
+import { requireAdminAccess } from "@/lib/admin-gate";
+import { AdminShell } from "@/components/admin-shell";
 
 const assignmentTypes = ASSIGNMENT_TYPE_ALLOWED;
 
@@ -26,6 +27,8 @@ export default async function EditAssignmentPage({
     redirect("/login");
   }
 
+  await requireAdminAccess(supabase, user.id);
+
   const { data: assignment } = await supabase
     .from("assignments")
     .select(
@@ -39,7 +42,7 @@ export default async function EditAssignmentPage({
   }
 
   return (
-    <ProtectedShell userEmail={user.email ?? null}>
+    <AdminShell userEmail={user.email ?? null}>
       <div className="max-w-3xl space-y-8">
         <header className="space-y-2">
           <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
@@ -150,6 +153,6 @@ export default async function EditAssignmentPage({
           </div>
         </form>
       </div>
-    </ProtectedShell>
+    </AdminShell>
   );
 }

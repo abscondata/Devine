@@ -1,17 +1,8 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { buildAssignmentStatusMap } from "@/lib/academic-standing";
 import { ProtectedShell } from "@/components/protected-shell";
-
-function formatDate(value: string | null | undefined) {
-  if (!value) return "";
-  return new Date(value).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
 
 export default async function AssignmentsIndexPage() {
   const supabase = await createClient();
@@ -79,6 +70,7 @@ export default async function AssignmentsIndexPage() {
     (courses ?? []).map((course) => [course.id, course])
   );
 
+  // Sort by course sequence, then module position, then due date
   const sortedAssignments = (assignments ?? []).slice().sort((a, b) => {
     const moduleA = modulesById.get(a.module_id);
     const moduleB = modulesById.get(b.module_id);
@@ -89,78 +81,106 @@ export default async function AssignmentsIndexPage() {
     if (courseOrderA !== courseOrderB) return courseOrderA - courseOrderB;
     const courseTitleA = courseA?.title ?? "";
     const courseTitleB = courseB?.title ?? "";
-    if (courseTitleA !== courseTitleB) {
-      return courseTitleA.localeCompare(courseTitleB);
-    }
+    if (courseTitleA !== courseTitleB) return courseTitleA.localeCompare(courseTitleB);
     const moduleOrderA = moduleA?.position ?? 9999;
     const moduleOrderB = moduleB?.position ?? 9999;
     if (moduleOrderA !== moduleOrderB) return moduleOrderA - moduleOrderB;
     return (a.due_at ?? "").localeCompare(b.due_at ?? "");
   });
 
+  // Group by course
+  const assignmentsByCourse = new Map<
+    string,
+    { course: NonNullable<typeof courses>[number]; assignments: typeof sortedAssignments }
+  >();
+
+  sortedAssignments.forEach((assignment) => {
+    const module = modulesById.get(assignment.module_id);
+    const course = module ? coursesById.get(module.course_id) : null;
+    if (!course) return;
+    const existing = assignmentsByCourse.get(course.id);
+    if (existing) {
+      existing.assignments.push(assignment);
+    } else {
+      assignmentsByCourse.set(course.id, { course, assignments: [assignment] });
+    }
+  });
+
+  const orderedCourseGroups = Array.from(assignmentsByCourse.values()).sort(
+    (a, b) => (a.course.sequence_position ?? 9999) - (b.course.sequence_position ?? 9999)
+  );
+
+  const totalAssignments = sortedAssignments.length;
+  const finalCount = sortedAssignments.filter((a) => assignmentStatus.get(a.id)?.hasFinal).length;
+
   return (
     <ProtectedShell userEmail={user.email ?? null}>
       <div className="space-y-10">
         <header className="space-y-2">
           <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
-            Assignment Ledger
+            Work Record
           </p>
-          <h1 className="text-3xl font-semibold">Assignments</h1>
+          <h1 className="text-3xl">Written Work</h1>
           <p className="text-sm text-[var(--muted)]">
-            Submission status and official final-work tracking.
+            {totalAssignments} assignments across the curriculum{finalCount > 0 ? ` · ${finalCount} finalized` : ""}.
           </p>
         </header>
 
-        <section className="space-y-4">
-          {sortedAssignments.length ? (
-            <div className="space-y-3">
-              {sortedAssignments.map((assignment) => {
-                const module = modulesById.get(assignment.module_id);
-                const course = module ? coursesById.get(module.course_id) : null;
-                const status = assignmentStatus.get(assignment.id);
-                const statusLabel = status?.hasFinal
-                  ? status.hasCritique
-                    ? "Final · Critiqued"
-                    : "Final · Critique pending (completion unaffected)"
-                  : status?.hasDraft
-                  ? "Draft · Not final"
-                  : "No submission";
+        {orderedCourseGroups.length ? (
+          orderedCourseGroups.map(({ course, assignments: courseAssignments }) => (
+            <section key={course.id} className="space-y-3">
+              <div className="space-y-1">
+                <Link
+                  href={`/courses/${course.id}`}
+                  className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] hover:text-[var(--text)]"
+                >
+                  {course.code ?? ""}
+                </Link>
+                <h2 className="text-lg">{course.title}</h2>
+              </div>
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
+                {courseAssignments.map((assignment) => {
+                  const module = modulesById.get(assignment.module_id);
+                  const status = assignmentStatus.get(assignment.id);
+                  const statusLabel = status?.hasFinal
+                    ? status.hasCritique
+                      ? "Final · Critiqued"
+                      : "Final"
+                    : status?.hasDraft
+                    ? "Draft"
+                    : "Not submitted";
 
-                return (
-                  <div
-                    key={assignment.id}
-                    className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-2"
-                  >
-                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                      {course?.code ? `${course.code} — ` : ""}
-                      {course?.title ?? "Course"}
-                    </p>
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <h2 className="text-lg font-semibold">{assignment.title}</h2>
-                        <p className="text-sm text-[var(--muted)]">
-                          {module?.title ?? "Module"}
+                  return (
+                    <Link
+                      key={assignment.id}
+                      href={`/assignments/${assignment.id}`}
+                      className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 transition hover:bg-[var(--surface-muted)]"
+                    >
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-semibold">{assignment.title}</p>
+                        <p className="text-xs text-[var(--muted)]">
+                          {[
+                            module?.title,
+                            assignment.assignment_type.replace(/_/g, " "),
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
                         </p>
                       </div>
-                      <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                        {assignment.due_at ? formatDate(assignment.due_at) : "No deadline"}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                      <span>{assignment.assignment_type.replace(/_/g, " ")}</span>
-                      <span>{statusLabel}</span>
-                      <Link href={`/assignments/${assignment.id}`}>View assignment</Link>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)]">
-              No assignments found.
-            </div>
-          )}
-        </section>
+                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] shrink-0">
+                        {statusLabel}
+                      </p>
+                    </Link>
+                  );
+                })}
+              </div>
+            </section>
+          ))
+        ) : (
+          <p className="text-sm text-[var(--muted)]">
+            No assignments have been assigned.
+          </p>
+        )}
       </div>
     </ProtectedShell>
   );
