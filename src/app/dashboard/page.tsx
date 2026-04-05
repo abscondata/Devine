@@ -327,12 +327,26 @@ export default async function DashboardPage() {
     };
   });
 
-  const openAssignments = (assignments ?? []).filter(
-    (assignment) => !finalSet.has(assignment.id)
+  // ─── Canonical truth derivation ───
+  // All page state derives from these. No section may contradict another.
+
+  // 1. Filter modules to prerequisite-valid courses only.
+  //    A course is valid for "current study" only if its readiness is
+  //    "ready" (prerequisites met) or "completed". This prevents showing
+  //    an advanced course as active while its prerequisites are pending.
+  const validCourseIds = new Set(
+    courseIds.filter((id) => {
+      const r = readinessByCourse.get(id);
+      return r?.status === "ready" || r?.status === "completed";
+    })
+  );
+  const validModuleProgress = moduleProgress.filter(
+    (m) => validCourseIds.has(m.course_id)
   );
 
+  // 2. Select current module from valid courses only.
   const currentWork = getCurrentWorkSelection({
-    moduleProgress,
+    moduleProgress: validModuleProgress,
     coursesById,
     readingsByModule,
     assignmentsByModule,
@@ -340,24 +354,19 @@ export default async function DashboardPage() {
     finalAssignmentIds: finalSet,
   });
   const currentModule = currentWork.currentModule;
-  const currentModuleReadings = currentWork.currentModuleReadings;
   const currentReadings = currentWork.currentReadings;
-  const currentSkippedReadings = currentWork.currentSkippedReadings;
-  const currentModuleAssignments = currentWork.currentModuleAssignments;
   const currentAssignments = currentWork.currentAssignments;
   const nextAction = currentWork.nextAction;
 
-  // Derive the current active course from the current module
+  // 3. Derive active course from the valid current module.
   const activeCourse = currentModule
     ? courseSummaries.find((c) => c.id === currentModule.course_id) ?? null
     : null;
-
-  // Derive the active course's module count for "Unit X of Y"
-  const activeCourseTotalModules = activeCourse
+  const activeCourseTotalUnits = activeCourse
     ? moduleProgress.filter((m) => m.course_id === activeCourse.id).length
     : 0;
 
-  // Credit computations
+  // 4. Credit computations from the same courseSummaries/transcript source.
   const creditsEarned = completedCourses.reduce(
     (sum, c) => sum + (c.credits_or_weight ?? 0), 0
   );
@@ -367,37 +376,46 @@ export default async function DashboardPage() {
   const totalCreditsRequired = (requirementBlocks ?? []).reduce(
     (sum, b) => sum + (b.minimum_credits_required ?? 0), 0
   );
+  const totalFinalSubmissions = finalSubmissions.length;
 
-  // Estimated reading hours for current module (from raw readings, not ReadingLike)
-  const currentModuleRawReadings = currentModule
-    ? (readings ?? []).filter((r) => r.module_id === currentModule.id)
-    : [];
-  const currentModuleHours = currentModuleRawReadings.reduce(
-    (sum, r) => sum + (r.estimated_hours ?? 0), 0
-  );
+  // 5. Current unit reading hours (from raw readings, not ReadingLike type).
+  const currentUnitHours = currentModule
+    ? (readings ?? [])
+        .filter((r) => r.module_id === currentModule.id)
+        .reduce((sum, r) => sum + (r.estimated_hours ?? 0), 0)
+    : 0;
 
-  // Academic standing derivation
-  const allBlocksSatisfied = blockSummaries.every((s) => s.satisfied);
-  const academicStanding = allBlocksSatisfied
-    ? "Program complete"
-    : inProgressCourses.length > 0 || completedCourses.length > 0
-    ? "In good standing"
-    : "Enrolled";
-
-  // Current module blockers
-  const currentModuleStanding = currentModule
+  // 6. Current unit standing (for blocker display).
+  const currentUnitStanding = currentModule
     ? getModuleStanding({
-        readings: currentModuleReadings ?? [],
-        assignments: currentModuleAssignments ?? [],
+        readings: (readingsByModule.get(currentModule.id) ?? []) as Parameters<typeof getModuleStanding>[0]["readings"],
+        assignments: (assignmentsByModule.get(currentModule.id) ?? []) as Parameters<typeof getModuleStanding>[0]["assignments"],
         assignmentStatus,
       })
     : null;
+
+  // 7. Academic standing — single derivation used in identity strip.
+  const allBlocksSatisfied = blockSummaries.every((s) => s.satisfied);
+  const academicStanding = allBlocksSatisfied
+    ? "Program complete"
+    : completedCourses.length > 0 || inProgressCourses.length > 0
+    ? "In good standing"
+    : "Enrolled";
+
+  // 8. Current course open written work (scoped to active course only).
+  const currentCourseOpenWork = activeCourse
+    ? (assignments ?? []).filter(
+        (a) =>
+          !finalSet.has(a.id) &&
+          assignmentToCourse.get(a.id) === activeCourse.id
+      )
+    : [];
 
   return (
     <ProtectedShell userEmail={user.email ?? null}>
       <div className="space-y-10">
 
-        {/* ── Identity strip ── */}
+        {/* ═══ ZONE A: Academic Identity ═══ */}
         <header className="space-y-4">
           <div className="space-y-1">
             <h1 className="text-3xl">College Home</h1>
@@ -409,36 +427,37 @@ export default async function DashboardPage() {
             <div className="flex flex-wrap gap-x-8 gap-y-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
               <span>Standing: {academicStanding}</span>
               <span>Credits earned: {creditsEarned}{totalCreditsRequired ? ` of ${totalCreditsRequired}` : ""}</span>
-              {creditsInProgress > 0 ? <span>Credits in progress: {creditsInProgress}</span> : null}
-              <span>Courses complete: {completedCourses.length} of {courseSummaries.length}</span>
-              <span>Mode: Self-paced, institutionally sequenced</span>
+              {creditsInProgress > 0 ? <span>In progress: {creditsInProgress} cr</span> : null}
+              <span>Courses: {completedCourses.length} complete, {inProgressCourses.length} in progress</span>
+              <span>Final submissions: {totalFinalSubmissions}</span>
             </div>
           </div>
         </header>
 
-        {/* ── Current enrollment ── */}
+        {/* ═══ ZONE B: Current Study ═══ */}
         {activeCourse && currentModule ? (
           <section className="space-y-4">
-            <h2 className="text-2xl">Current Enrollment</h2>
+            <h2 className="text-2xl">Current Course</h2>
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 space-y-5">
+
+              {/* Course identity */}
               <div className="flex flex-wrap items-start justify-between gap-6">
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <Link href={`/courses/${activeCourse.id}`}>
                     <h3 className="text-2xl font-semibold">{activeCourse.title}</h3>
                   </Link>
-                  <p className="text-sm text-[var(--muted)]">
-                    {activeCourse.description ?? ""}
-                  </p>
+                  <p className="text-sm text-[var(--muted)]">{activeCourse.description ?? ""}</p>
                 </div>
                 <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] text-right space-y-1 shrink-0">
-                  <p>{activeCourse.code ?? ""}</p>
-                  <p>{activeCourse.level ?? ""}</p>
-                  <p>{activeCourse.credits_or_weight ? `${activeCourse.credits_or_weight} credits` : ""}</p>
+                  {activeCourse.code ? <p>{activeCourse.code}</p> : null}
+                  {activeCourse.level ? <p>{activeCourse.level}</p> : null}
+                  {activeCourse.credits_or_weight ? <p>{activeCourse.credits_or_weight} credits</p> : null}
                 </div>
               </div>
+
+              {/* Course standing */}
               <div className="flex flex-wrap gap-x-8 gap-y-1 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                <span>Status: In progress</span>
-                <span>{activeCourse.completedTasks} of {activeCourse.totalTasks} requirements fulfilled</span>
+                <span>{activeCourse.completedTasks} of {activeCourse.totalTasks} course requirements fulfilled</span>
                 <span>{activeCourse.finalAssignments} of {activeCourse.totalAssignments} final submissions</span>
                 {activeCourse.unreadReadings > 0 ? (
                   <span>{activeCourse.unreadReadings} reading{activeCourse.unreadReadings === 1 ? "" : "s"} remaining</span>
@@ -452,52 +471,36 @@ export default async function DashboardPage() {
               >
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                    Current unit{activeCourseTotalModules ? ` · ${currentModule.position + 1} of ${activeCourseTotalModules}` : ""}
+                    Current unit{activeCourseTotalUnits ? ` · ${currentModule.position + 1} of ${activeCourseTotalUnits}` : ""}
                   </p>
-                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                    Continue study
-                  </p>
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Continue study</p>
                 </div>
-                <h4 className="text-lg font-semibold text-[var(--text)]">
-                  {currentModule.title}
-                </h4>
+                <h4 className="text-lg font-semibold text-[var(--text)]">{currentModule.title}</h4>
                 <div className="flex flex-wrap gap-x-8 gap-y-1 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                  <span>{currentModule.completedTasks} of {currentModule.totalTasks} requirements fulfilled</span>
-                  {currentModuleHours ? <span>Estimated reading: {currentModuleHours.toFixed(1)}h</span> : null}
-                  {currentReadings.length > 0 ? <span>{currentReadings.length} reading{currentReadings.length === 1 ? "" : "s"} unread</span> : null}
-                  {currentAssignments.length > 0 ? <span>{currentAssignments.length} assignment{currentAssignments.length === 1 ? "" : "s"} outstanding</span> : null}
+                  <span>{currentModule.completedTasks} of {currentModule.totalTasks} unit requirements fulfilled</span>
+                  {currentUnitHours ? <span>Estimated reading: {currentUnitHours.toFixed(1)}h</span> : null}
                 </div>
-                {currentModuleStanding && currentModuleStanding.completion.unreadReadings > 0 ? (
-                  <p className="text-xs text-[var(--muted)]">
-                    Unread readings block unit completion.
-                  </p>
+                {currentUnitStanding && currentUnitStanding.completion.unreadReadings > 0 ? (
+                  <p className="text-xs text-[var(--muted)]">Unread readings block unit completion.</p>
                 ) : null}
               </Link>
 
-              {/* Readings and work detail */}
+              {/* Unit detail: readings + written work */}
               {(currentReadings.length > 0 || currentAssignments.length > 0) ? (
                 <div className="grid gap-5 md:grid-cols-2">
                   {currentReadings.length > 0 ? (
                     <div className="space-y-2">
-                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                        Assigned readings
-                      </p>
+                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Readings</p>
                       <ul className="space-y-1 text-sm text-[var(--muted)]">
-                        {currentReadings.map((reading) => (
-                          <li key={reading.id}>{reading.title}</li>
-                        ))}
+                        {currentReadings.map((r) => <li key={r.id}>{r.title}</li>)}
                       </ul>
                     </div>
                   ) : null}
                   {currentAssignments.length > 0 ? (
                     <div className="space-y-2">
-                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                        Outstanding written work
-                      </p>
+                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Written work</p>
                       <ul className="space-y-1 text-sm text-[var(--muted)]">
-                        {currentAssignments.map((assignment) => (
-                          <li key={assignment.id}>{assignment.title}</li>
-                        ))}
+                        {currentAssignments.map((a) => <li key={a.id}>{a.title}</li>)}
                       </ul>
                     </div>
                   ) : null}
@@ -507,273 +510,159 @@ export default async function DashboardPage() {
               {/* Next obligation */}
               {nextAction ? (
                 <div className="border-t border-[var(--border)] pt-4 space-y-1">
-                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                    Next obligation
-                  </p>
-                  <p className="text-sm font-semibold text-[var(--text)]">
-                    {nextAction.title}
-                  </p>
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Next obligation</p>
+                  <p className="text-sm font-semibold text-[var(--text)]">{nextAction.title}</p>
                   <p className="text-sm text-[var(--muted)]">{nextAction.reason}</p>
                 </div>
               ) : null}
             </div>
+
+            {/* Current course written work */}
+            {currentCourseOpenWork.length > 0 ? (
+              <div className="space-y-3">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Outstanding written work · {activeCourse.code}
+                </p>
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
+                  {currentCourseOpenWork.map((a) => (
+                    <Link key={a.id} href={`/assignments/${a.id}`} className="flex flex-wrap items-center justify-between gap-4 px-5 py-3 transition hover:bg-[var(--surface-muted)]">
+                      <p className="text-sm font-semibold">{a.title}</p>
+                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">{a.assignment_type?.replace(/_/g, " ") ?? ""}</p>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </section>
         ) : (
           <section className="space-y-4">
-            <h2 className="text-2xl">Current Enrollment</h2>
+            <h2 className="text-2xl">Current Course</h2>
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 space-y-3">
-              {completedCourses.length > 0 ? (
-                <p className="text-sm text-[var(--muted)]">
-                  All active coursework is complete. See the curriculum sequence below for the next course of study.
-                </p>
+              {completedCourses.length > 0 && !recommendedNext ? (
+                <p className="text-sm font-semibold text-[var(--text)]">All coursework complete.</p>
               ) : recommendedNext ? (
-                <div className="space-y-2">
+                <>
                   <p className="text-sm text-[var(--muted)]">
-                    No course is currently in progress.
+                    {completedCourses.length > 0
+                      ? "Current coursework is complete."
+                      : "No course is currently in progress."}
                   </p>
-                  <Link
-                    href={`/courses/${recommendedNext.id}`}
-                    className="block rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4 transition hover:border-[var(--accent-soft)]"
-                  >
-                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                      Ready to begin
-                    </p>
+                  <Link href={`/courses/${recommendedNext.id}`} className="block rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4 transition hover:border-[var(--accent-soft)]">
+                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Ready to begin</p>
                     <p className="mt-1 text-lg font-semibold text-[var(--text)]">
-                      {recommendedNext.code ? `${recommendedNext.code} — ` : ""}
-                      {recommendedNext.title}
-                    </p>
-                    <p className="mt-1 text-sm text-[var(--muted)]">
-                      {recommendedNext.description ?? ""}
+                      {recommendedNext.code ? `${recommendedNext.code} — ` : ""}{recommendedNext.title}
                     </p>
                   </Link>
-                </div>
+                </>
               ) : (
-                <p className="text-sm text-[var(--muted)]">
-                  No course is currently in progress.
-                </p>
+                <p className="text-sm text-[var(--muted)]">No course is currently in progress.</p>
               )}
             </div>
           </section>
         )}
 
-        {/* ── Curriculum sequence ── */}
-        <section className="space-y-4">
-          <h2 className="text-xl">Curriculum Sequence</h2>
-          <p className="text-sm text-[var(--muted)]">
-            The foundations sequence establishes method and content for the
-            entire curriculum. PHIL 501 undergirds THEO 510; HIST 520 and
-            SCRP 530 complete the early ecclesial and scriptural arc.
-          </p>
-          {foundationCourses.length ? (
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
-              {foundationCourses.map((course) => {
-                const isActive = activeCourse?.id === course.id;
-                const standing = readinessByCourse.get(course.id);
-                const prereqs = prereqsByCourse.get(course.id) ?? [];
-                const unmetPrereqs = prereqs.filter(
-                  (p) => !(completionByCourse.get(p.id) ?? false)
-                );
-                const standingLabel = standing?.status === "completed"
-                  ? "Complete"
-                  : standing?.status === "ready"
-                  ? isActive ? "Currently enrolled" : "Prerequisites satisfied"
-                  : "Prerequisites pending";
-                const blockerText = unmetPrereqs.length
-                  ? unmetPrereqs.map((p) => p.code ?? p.title).join(", ")
-                  : null;
+        {/* ═══ ZONE C: Institutional Standing ═══ */}
+        <section className="space-y-6">
+          <h2 className="text-xl">Institutional Standing</h2>
 
-                return (
-                  <Link
-                    key={course.id}
-                    href={`/courses/${course.id}`}
-                    className="flex flex-wrap items-center justify-between gap-4 p-5 transition hover:bg-[var(--surface-muted)]"
-                  >
-                    <div className="space-y-0.5">
-                      <h3 className="text-base font-semibold">
-                        {course.code ? `${course.code} — ` : ""}
-                        {course.title}
-                      </h3>
-                      {course.credits_or_weight ? (
-                        <p className="text-xs text-[var(--muted)]">{course.credits_or_weight} credits</p>
-                      ) : null}
-                    </div>
-                    <div className="text-right shrink-0 space-y-0.5">
-                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                        {standingLabel}
-                      </p>
-                      {blockerText && standing?.status !== "completed" && standing?.status !== "ready" ? (
-                        <p className="text-xs text-[var(--muted)]">
-                          Requires {blockerText}
-                        </p>
-                      ) : null}
-                    </div>
-                  </Link>
-                );
-              })}
+          {/* Academic record summary */}
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Academic record</p>
+            <div className="flex flex-wrap gap-x-8 gap-y-1 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+              <span>Courses completed: {completedCourses.length}</span>
+              <span>Credits earned: {creditsEarned}</span>
+              <span>In progress: {inProgressCourses.length} courses, {creditsInProgress} cr</span>
             </div>
-          ) : null}
-          {recommendedNext && !foundationCourses.some((c) => c.id === recommendedNext.id) ? (
-            <div className="space-y-2 pt-2">
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                Next in sequence
-              </p>
-              <Link
-                href={`/courses/${recommendedNext.id}`}
-                className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 transition hover:border-[var(--accent-soft)]"
-              >
-                <h3 className="text-base font-semibold">
-                  {recommendedNext.code ? `${recommendedNext.code} — ` : ""}
-                  {recommendedNext.title}
-                </h3>
+            {completedCourses.length ? (
+              <ul className="space-y-1 text-sm text-[var(--muted)]">
+                {completedCourses.map((c) => (
+                  <li key={c.id}>
+                    {c.code ? `${c.code} — ` : ""}{c.title}
+                    {c.finalDate ? <span className="text-xs uppercase tracking-[0.2em]"> · {formatDate(c.finalDate)}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {programSummaries[0]?.id ? (
+              <div className="flex flex-wrap gap-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                <Link href={`/programs/${programSummaries[0].id}/record`} className="hover:text-[var(--text)]">Full academic record</Link>
+                <Link href={`/programs/${programSummaries[0].id}/work`} className="hover:text-[var(--text)]">Submission record</Link>
+              </div>
+            ) : null}
+          </div>
+
+          {/* Program audit summary */}
+          {programSummaries.length ? (
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Program audit</p>
                 <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Prerequisites satisfied
+                  {programSummaries[0].satisfiedBlocks} of {programSummaries[0].totalBlocks} blocks satisfied
                 </p>
-              </Link>
-            </div>
-          ) : null}
-        </section>
-
-        {/* ── Program audit ── */}
-        {programSummaries.length ? (
-          <section className="space-y-4">
-            <h2 className="text-xl">Program Audit</h2>
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
-              {blockSummaries.map((summary) => (
-                <div
-                  key={summary.block.id}
-                  className="flex flex-wrap items-center justify-between gap-4 px-5 py-3"
-                >
-                  <div className="space-y-0.5">
-                    <p className="text-sm font-semibold">{summary.block.title}</p>
-                    {summary.block.minimum_courses_required ? (
-                      <p className="text-xs text-[var(--muted)]">
-                        {summary.completedCourseIds.length} of {summary.block.minimum_courses_required} courses
-                        {summary.block.minimum_credits_required ? ` · ${summary.completedCredits} of ${summary.block.minimum_credits_required} credits` : ""}
-                      </p>
-                    ) : null}
-                  </div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] shrink-0">
-                    {summary.satisfied ? "Satisfied" : summary.status === "in progress" ? "In progress" : "Incomplete"}
+              </div>
+              {(() => {
+                const nextIncomplete = blockSummaries.find((s) => !s.satisfied);
+                return nextIncomplete ? (
+                  <p className="text-sm text-[var(--muted)]">
+                    Next incomplete: <span className="font-semibold text-[var(--text)]">{nextIncomplete.block.title}</span>
+                    {" "}({nextIncomplete.status})
                   </p>
-                </div>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              <span>{programSummaries[0].satisfiedBlocks} of {programSummaries[0].totalBlocks} blocks satisfied</span>
+                ) : (
+                  <p className="text-sm font-semibold text-[var(--text)]">All requirement blocks satisfied.</p>
+                );
+              })()}
               {programSummaries[0].id ? (
-                <Link href={`/programs/${programSummaries[0].id}/audit`} className="hover:text-[var(--text)]">
+                <Link href={`/programs/${programSummaries[0].id}/audit`} className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] hover:text-[var(--text)]">
                   Full program audit
                 </Link>
               ) : null}
             </div>
-          </section>
-        ) : null}
-
-        {/* ── Academic record ── */}
-        <section className="space-y-4">
-          <h2 className="text-xl">Academic Record</h2>
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-4">
-            <div className="flex flex-wrap gap-x-8 gap-y-1 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              <span>Courses completed: {completedCourses.length}</span>
-              <span>Credits earned: {creditsEarned}</span>
-              {creditsInProgress > 0 ? <span>Credits in progress: {creditsInProgress}</span> : null}
-              <span>Courses in progress: {inProgressCourses.length}</span>
-              <span>Courses remaining: {notStartedCourses.length}</span>
-            </div>
-            {completedCourses.length ? (
-              <div className="space-y-2">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Completed coursework</p>
-                <div className="rounded-lg border border-[var(--border)] divide-y divide-[var(--border)]">
-                  {completedCourses.map((course) => (
-                    <div key={course.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 text-sm text-[var(--muted)]">
-                      <span>
-                        {course.code ? `${course.code} — ` : ""}
-                        {course.title}
-                      </span>
-                      <span className="text-xs uppercase tracking-[0.2em]">
-                        {course.credits_or_weight ? `${course.credits_or_weight} cr` : ""}
-                        {course.finalDate ? ` · ${formatDate(course.finalDate)}` : ""}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            {programSummaries[0]?.id ? (
-              <div className="flex flex-wrap gap-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                <Link href={`/programs/${programSummaries[0].id}/record`} className="hover:text-[var(--text)]">
-                  Full academic record
-                </Link>
-                <Link href={`/programs/${programSummaries[0].id}/work`} className="hover:text-[var(--text)]">
-                  Submission record
-                </Link>
-              </div>
-            ) : null}
-          </div>
+          ) : null}
         </section>
 
-        {/* ── Current obligations (scoped to active course) ── */}
-        {(() => {
-          const currentCourseAssignments = activeCourse
-            ? openAssignments.filter((a) => assignmentToCourse.get(a.id) === activeCourse.id)
-            : [];
-          const nextReadyCourseId = recommendedNext?.id;
-          const nextReadyAssignments = nextReadyCourseId && nextReadyCourseId !== activeCourse?.id
-            ? openAssignments.filter((a) => assignmentToCourse.get(a.id) === nextReadyCourseId).slice(0, 3)
-            : [];
-          const nextReadyCourse = nextReadyCourseId ? coursesById.get(nextReadyCourseId) : null;
+        {/* ═══ ZONE D: Forward Sequence ═══ */}
+        <section className="space-y-4">
+          <h2 className="text-xl">Curriculum Sequence</h2>
+          <p className="text-sm text-[var(--muted)]">
+            The foundations sequence establishes method and content for the
+            entire curriculum. Courses unlock as prerequisites are completed.
+          </p>
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
+            {foundationCourses.map((course) => {
+              const isActive = activeCourse?.id === course.id;
+              const standing = readinessByCourse.get(course.id);
+              const prereqs = prereqsByCourse.get(course.id) ?? [];
+              const unmetPrereqs = prereqs.filter((p) => !(completionByCourse.get(p.id) ?? false));
 
-          if (!currentCourseAssignments.length && !nextReadyAssignments.length) return null;
+              let label: string;
+              if (standing?.status === "completed") label = "Complete";
+              else if (isActive) label = "Current course";
+              else if (standing?.status === "ready") label = "Ready";
+              else label = "Blocked";
 
-          return (
-            <section className="space-y-4">
-              {currentCourseAssignments.length ? (
-                <div className="space-y-3">
-                  <h2 className="text-xl">Current Obligations</h2>
-                  <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
-                    {currentCourseAssignments.map((assignment) => (
-                      <Link
-                        key={assignment.id}
-                        href={`/assignments/${assignment.id}`}
-                        className="flex flex-wrap items-center justify-between gap-4 px-5 py-3 transition hover:bg-[var(--surface-muted)]"
-                      >
-                        <div className="space-y-0.5">
-                          <p className="text-sm font-semibold">{assignment.title}</p>
-                          <p className="text-xs text-[var(--muted)]">
-                            {activeCourse?.code ?? ""}{activeCourse?.code ? " · " : ""}{assignment.assignment_type?.replace(/_/g, " ") ?? ""}
-                          </p>
-                        </div>
-                        <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] shrink-0">
-                          {finalSet.has(assignment.id) ? "Final submitted" : "Outstanding"}
-                        </p>
-                      </Link>
-                    ))}
+              return (
+                <Link key={course.id} href={`/courses/${course.id}`} className="flex flex-wrap items-center justify-between gap-4 p-5 transition hover:bg-[var(--surface-muted)]">
+                  <div className="space-y-0.5">
+                    <h3 className="text-base font-semibold">{course.code ? `${course.code} — ` : ""}{course.title}</h3>
+                    {course.credits_or_weight ? <p className="text-xs text-[var(--muted)]">{course.credits_or_weight} credits</p> : null}
                   </div>
-                </div>
-              ) : null}
-              {nextReadyAssignments.length ? (
-                <div className="space-y-3">
-                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                    Next ready course: {nextReadyCourse?.code ?? ""}{nextReadyCourse?.code ? " — " : ""}{nextReadyCourse?.title ?? ""}
-                  </p>
-                  <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
-                    {nextReadyAssignments.map((assignment) => (
-                      <div
-                        key={assignment.id}
-                        className="flex flex-wrap items-center justify-between gap-4 px-5 py-3 text-sm text-[var(--muted)]"
-                      >
-                        <p>{assignment.title}</p>
-                        <p className="text-xs uppercase tracking-[0.2em] shrink-0">
-                          {assignment.assignment_type?.replace(/_/g, " ") ?? ""}
-                        </p>
-                      </div>
-                    ))}
+                  <div className="text-right shrink-0 space-y-0.5">
+                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">{label}</p>
+                    {label === "Blocked" && unmetPrereqs.length ? (
+                      <p className="text-xs text-[var(--muted)]">Requires {unmetPrereqs.map((p) => p.code ?? p.title).join(", ")}</p>
+                    ) : null}
                   </div>
-                </div>
-              ) : null}
-            </section>
-          );
-        })()}
+                </Link>
+              );
+            })}
+          </div>
+          {recommendedNext && !foundationCourses.some((c) => c.id === recommendedNext.id) ? (
+            <Link href={`/courses/${recommendedNext.id}`} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 transition hover:border-[var(--accent-soft)]">
+              <h3 className="text-base font-semibold">{recommendedNext.code ? `${recommendedNext.code} — ` : ""}{recommendedNext.title}</h3>
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Next in sequence</p>
+            </Link>
+          ) : null}
+        </section>
       </div>
     </ProtectedShell>
   );
