@@ -347,22 +347,21 @@ export default async function DashboardPage() {
     <ProtectedShell userEmail={user.email ?? null}>
       <div className="space-y-8">
 
-        {/* ─── Term header ─── */}
-        <header>
-          <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
+        <header className="space-y-2">
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
             {currentProgram.title}
           </p>
           {currentTerm ? (
-            <div className="mt-1 flex flex-wrap items-baseline gap-x-6 gap-y-1">
-              <Link href="/term"><h1 className="text-3xl">{currentTerm.title}</h1></Link>
-              <div className="flex flex-wrap gap-x-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            <>
+              <h1 className="text-3xl"><Link href="/term">{currentTerm.title}</Link></h1>
+              <div className="flex flex-wrap items-center gap-x-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                 {schedule ? <span>Week {schedule.currentWeek} of {schedule.totalWeeks}</span> : null}
                 <span>{termCourseSummaries.length} course{termCourseSummaries.length === 1 ? "" : "s"}</span>
-                <Link href="/term" className="hover:text-[var(--text)]">Full term view</Link>
+                <Link href="/term" className="hover:text-[var(--text)]">Full term</Link>
               </div>
-            </div>
+            </>
           ) : (
-            <h1 className="mt-1 text-3xl">My Term</h1>
+            <h1 className="text-3xl">My Term</h1>
           )}
         </header>
 

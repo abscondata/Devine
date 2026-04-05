@@ -320,27 +320,24 @@ export default async function CoursePage({
 
   return (
     <ProtectedShell userEmail={user.email ?? null}>
-      <div className="space-y-10">
-        {/* ─── Course header ─── */}
-        <header className="space-y-3">
-          <Link href="/dashboard" className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-            My Term
-          </Link>
-          <div className="space-y-2">
-            <div className="flex flex-wrap gap-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              <span>{course.code}</span>
-              {course.level ? <span>{course.level}</span> : null}
-              {course.credits_or_weight ? <span>{course.credits_or_weight} credits</span> : null}
-            </div>
-            <h1 className="text-3xl">{course.title}</h1>
-            <p className="text-sm text-[var(--muted)]">{course.description ?? ""}</p>
+      <div className="space-y-8">
+        <header className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            <Link href="/dashboard">My Term</Link>
           </div>
+          <div className="flex flex-wrap items-center gap-x-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            <span>{course.code}</span>
+            {course.level ? <span>{course.level}</span> : null}
+            {course.credits_or_weight ? <span>{course.credits_or_weight} credits</span> : null}
+          </div>
+          <h1 className="text-3xl">{course.title}</h1>
+          {course.description ? <p className="text-sm text-[var(--muted)]">{course.description}</p> : null}
         </header>
 
         {/* ─── Your progress ─── */}
         <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Your progress</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Progress</p>
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
               {isCourseComplete ? "Complete" : `${completedTasks} of ${totalTasks} fulfilled · ${finalAssignments} of ${totalAssignments} final submissions`}
             </p>
@@ -364,7 +361,7 @@ export default async function CoursePage({
         </section>
 
         <section className="space-y-4">
-          <h2 className="text-xl">Syllabus</h2>
+          <h2 className="text-lg">Syllabus</h2>
 
           {moduleSummaries.length ? (
             <div className="space-y-6">
@@ -435,7 +432,7 @@ export default async function CoursePage({
 
         {(course.syllabus || course.learning_outcomes) ? (
           <section className="space-y-3">
-            <h2 className="text-xl">Course Description</h2>
+            <h2 className="text-lg">Course Description</h2>
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-4">
               {course.syllabus ? (
                 <div className="space-y-1">
@@ -454,7 +451,7 @@ export default async function CoursePage({
         ) : null}
 
         <section className="space-y-3">
-          <h2 className="text-xl">Standing</h2>
+          <h2 className="text-lg">Standing</h2>
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3 text-sm text-[var(--muted)]">
             {unreadReadings === 0 &&
             skippedReadings === 0 &&
@@ -496,7 +493,7 @@ export default async function CoursePage({
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-xl">Course Details</h2>
+          <h2 className="text-lg">Course Details</h2>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
               <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">Prerequisites</h3>

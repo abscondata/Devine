@@ -116,24 +116,19 @@ export default async function ModulePage({
     <ProtectedShell userEmail={user.email ?? null}>
       <div className="space-y-8">
 
-        {/* ─── Header ─── */}
-        <header className="space-y-3">
+        <header className="space-y-2">
           <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
             <Link href="/dashboard">My Term</Link>
             <span>/</span>
-            <Link href={`/courses/${module.course?.id}`}>{module.course?.code ?? module.course?.title ?? "Course"}</Link>
+            <Link href={`/courses/${module.course?.id}`}>{module.course?.code ?? "Course"}</Link>
           </div>
-          <div className="space-y-2">
-            <div className="flex flex-wrap gap-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              <span>Unit {module.position + 1} of {totalUnits}</span>
-              {unitSched ? <span>{formatScheduleDate(unitSched.startsAt)} – {formatScheduleDate(unitSched.endsAt)}</span> : null}
-              {totalHours ? <span>{totalHours.toFixed(1)}h reading</span> : null}
-            </div>
-            <h1 className="text-3xl">{module.title}</h1>
-            {module.overview ? (
-              <p className="text-sm text-[var(--muted)]">{module.overview}</p>
-            ) : null}
+          <div className="flex flex-wrap items-center gap-x-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            <span>Unit {module.position + 1} of {totalUnits}</span>
+            {unitSched ? <span>{formatScheduleDate(unitSched.startsAt)} – {formatScheduleDate(unitSched.endsAt)}</span> : null}
+            {totalHours ? <span>{totalHours.toFixed(1)}h reading</span> : null}
           </div>
+          <h1 className="text-3xl">{module.title}</h1>
+          {module.overview ? <p className="text-sm text-[var(--muted)]">{module.overview}</p> : null}
         </header>
 
         {/* ─── Status + Next action ─── */}

@@ -122,8 +122,8 @@ export default async function AssignmentPage({
 
   return (
     <ProtectedShell userEmail={user.email ?? null}>
-      <div className="space-y-10">
-        <header className="space-y-3">
+      <div className="space-y-8">
+        <header className="space-y-2">
           <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
             <Link href="/dashboard">My Term</Link>
             <span>/</span>
@@ -135,18 +135,16 @@ export default async function AssignmentPage({
               {assignment.module?.title ?? "Unit"}
             </Link>
           </div>
-          <div className="space-y-2">
-            <h1 className="text-3xl">{assignment.title}</h1>
-            <div className="flex flex-wrap gap-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              <span>{assignment.assignment_type.replace(/_/g, " ")}</span>
-              {assignment.due_at ? <span>Due {formatDate(assignment.due_at)}</span> : null}
-              <span>{hasFinal ? "Final submitted" : latestSubmission ? `Draft v${latestSubmission.version}` : "Not submitted"}</span>
-            </div>
+          <div className="flex flex-wrap items-center gap-x-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            <span>{assignment.assignment_type.replace(/_/g, " ")}</span>
+            {assignment.due_at ? <span>Due {formatDate(assignment.due_at)}</span> : null}
+            <span>{hasFinal ? "Final submitted" : latestSubmission ? `Draft v${latestSubmission.version}` : "Not submitted"}</span>
           </div>
+          <h1 className="text-3xl">{assignment.title}</h1>
         </header>
 
         <section className="space-y-3">
-          <h2 className="text-xl">Instructions</h2>
+          <h2 className="text-lg">Instructions</h2>
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
             <div className="font-serif text-[var(--text)] leading-relaxed whitespace-pre-wrap">
               {assignment.instructions}
@@ -155,7 +153,7 @@ export default async function AssignmentPage({
         </section>
 
         <section className="space-y-4">
-          <h2 className="text-xl">Your Submission</h2>
+          <h2 className="text-lg">Your Submission</h2>
 
           {error ? (
             <div className="rounded-lg border border-[var(--danger)]/30 bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--danger)]">
@@ -202,7 +200,7 @@ export default async function AssignmentPage({
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-xl">Assignment Standing</h2>
+          <h2 className="text-lg">Standing</h2>
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-2 text-sm text-[var(--muted)]">
             <p className="text-sm font-semibold text-[var(--text)]">
               {standingSummary}
@@ -230,7 +228,7 @@ export default async function AssignmentPage({
         </section>
 
         <section className="space-y-4">
-          <h2 className="text-xl">Submission History</h2>
+          <h2 className="text-lg">Submission History</h2>
           {hasPostFinalDrafts && finalSubmission ? (
             <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--muted)]">
               Drafts exist after the locked final (version {finalSubmission.version}).

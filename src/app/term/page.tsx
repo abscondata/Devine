@@ -193,27 +193,25 @@ export default async function TermPage() {
 
   return (
     <ProtectedShell userEmail={user.email ?? null}>
-      <div className="space-y-10">
+      <div className="space-y-8">
 
-        {/* ─── Header ─── */}
-        <header className="space-y-3">
-          <Link href="/dashboard" className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">My Term</Link>
-          <div className="space-y-2">
-            <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
-              {currentProgram.title}
-            </p>
-            <h1 className="text-3xl">{currentTerm.title}</h1>
+        <header className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            <Link href="/dashboard">My Term</Link>
           </div>
-          <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            {currentProgram.title}
+          </p>
+          <h1 className="text-3xl">{currentTerm.title}</h1>
+          <div className="flex flex-wrap items-center gap-x-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
             {termStart && termEnd ? <span>{termStart} – {termEnd}</span> : null}
             {schedule ? <span>Week {schedule.currentWeek} of {schedule.totalWeeks}</span> : null}
             <span>{(courses ?? []).length} courses · {totalCredits} credits</span>
           </div>
         </header>
 
-        {/* ─── Course load ─── */}
         <section className="space-y-3">
-          <h2 className="text-xl">Course Load</h2>
+          <h2 className="text-lg">Course Load</h2>
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
             {(courses ?? []).map((course) => (
               <Link key={course.id} href={`/courses/${course.id}`} className="flex flex-wrap items-center justify-between gap-4 p-5 transition hover:bg-[var(--surface-muted)]">
@@ -231,10 +229,10 @@ export default async function TermPage() {
 
         {/* ─── Full term schedule ─── */}
         {courseSections.map(({ course, units }) => (
-          <section key={course.id} className="space-y-4">
+          <section key={course.id} className="space-y-3">
             <div className="space-y-1">
               <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">{course.code}</p>
-              <h2 className="text-xl">{course.title}</h2>
+              <h2 className="text-lg">{course.title}</h2>
             </div>
 
             <div className="space-y-4">
