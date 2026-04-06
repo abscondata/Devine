@@ -373,6 +373,7 @@ export default async function DashboardPage() {
                 {schedule ? <span>Week {schedule.currentWeek} of {schedule.totalWeeks}</span> : null}
                 <span>{termCourseSummaries.length} course{termCourseSummaries.length === 1 ? "" : "s"}</span>
                 <Link href="/term" className="hover:text-[var(--text)]">Full term</Link>
+                <Link href="/term/review" className="hover:text-[var(--text)]">Review packet</Link>
               </div>
             </>
           ) : (
