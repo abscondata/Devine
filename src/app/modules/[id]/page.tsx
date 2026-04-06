@@ -13,8 +13,9 @@ import {
 import { ProtectedShell } from "@/components/protected-shell";
 import {
   computeTermSchedule,
-  computeWorkDueDate,
+  getEffectiveDueDate,
   formatScheduleDate,
+  type TermAssignmentScheduleRow,
 } from "@/lib/term-schedule";
 
 const readingStatuses = READING_STATUS_ALLOWED;
@@ -112,6 +113,17 @@ export default async function ModulePage({
 
   const unitSched = schedule?.unitSchedules.get(module.id);
 
+  // Term schedule rows for this unit's assignments
+  const { data: currentTermForSched } = module.course?.program?.id
+    ? await supabase.from("academic_terms").select("id").eq("program_id", module.course.program.id).eq("is_current", true).maybeSingle()
+    : { data: null };
+  const assignmentIdsForSched = (assignments ?? []).map((a) => a.id);
+  const { data: scheduleRows } = currentTermForSched && assignmentIdsForSched.length
+    ? await supabase.from("term_assignment_schedule").select("assignment_id, default_due_at, current_due_at, revised_at").eq("term_id", currentTermForSched.id).in("assignment_id", assignmentIdsForSched)
+    : { data: [] as TermAssignmentScheduleRow[] };
+  const scheduleByAssignment = new Map<string, TermAssignmentScheduleRow>();
+  (scheduleRows ?? []).forEach((row) => scheduleByAssignment.set(row.assignment_id, row));
+
   return (
     <ProtectedShell userEmail={user.email ?? null}>
       <div className="space-y-8">
@@ -208,9 +220,13 @@ export default async function ModulePage({
               {(assignments ?? []).map((a) => {
                 const status = assignmentStatus.get(a.id);
                 const isFinal = status?.hasFinal;
-                const dueDate = unitSched
-                  ? computeWorkDueDate({ unitSchedule: unitSched, explicitDueAt: a.due_at })
-                  : a.due_at ? new Date(a.due_at) : null;
+                const effective = getEffectiveDueDate({
+                  termScheduleRow: scheduleByAssignment.get(a.id),
+                  canonicalDueAt: a.due_at,
+                  unitSchedule: unitSched ?? undefined,
+                });
+                const dueDate = effective?.date ?? null;
+                const isRevised = effective?.isRevised ?? false;
                 return (
                   <Link
                     key={a.id}
@@ -227,7 +243,7 @@ export default async function ModulePage({
                       </div>
                       {dueDate ? (
                         <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] shrink-0">
-                          {isFinal ? "Submitted" : `Due ${formatScheduleDate(dueDate)}`}
+                          {isFinal ? "Submitted" : `Due ${formatScheduleDate(dueDate)}${isRevised ? " · Revised" : ""}`}
                         </p>
                       ) : null}
                     </div>

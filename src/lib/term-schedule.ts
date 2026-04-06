@@ -106,19 +106,40 @@ export function formatScheduleDate(date: Date): string {
 }
 
 /**
+ * Term assignment schedule row (from term_assignment_schedule table).
+ */
+export type TermAssignmentScheduleRow = {
+  assignment_id: string;
+  default_due_at: string;
+  current_due_at: string;
+  revised_at: string | null;
+};
+
+/**
  * Returns the effective due date for written work.
- * Priority: explicit due_at > computed from unit schedule > null.
- * After schedule materialization, most assignments will have explicit due_at.
+ * Priority:
+ *   1. Term schedule row (current_due_at) — authoritative when materialized
+ *   2. Canonical assignment due_at — if set on the assignment itself
+ *   3. Computed from unit schedule — ephemeral fallback
  */
 export function getEffectiveDueDate(params: {
-  explicitDueAt: string | null;
-  unitSchedule: UnitSchedule | null;
-}): { date: Date; source: "explicit" | "computed" } | null {
-  if (params.explicitDueAt) {
-    return { date: new Date(params.explicitDueAt), source: "explicit" };
+  termScheduleRow?: TermAssignmentScheduleRow | null;
+  canonicalDueAt?: string | null;
+  unitSchedule?: UnitSchedule | null;
+}): { date: Date; source: "term" | "canonical" | "computed"; isRevised: boolean; defaultDate?: Date } | null {
+  if (params.termScheduleRow) {
+    return {
+      date: new Date(params.termScheduleRow.current_due_at),
+      source: "term",
+      isRevised: Boolean(params.termScheduleRow.revised_at),
+      defaultDate: new Date(params.termScheduleRow.default_due_at),
+    };
+  }
+  if (params.canonicalDueAt) {
+    return { date: new Date(params.canonicalDueAt), source: "canonical", isRevised: false };
   }
   if (params.unitSchedule) {
-    return { date: params.unitSchedule.endsAt, source: "computed" };
+    return { date: params.unitSchedule.endsAt, source: "computed", isRevised: false };
   }
   return null;
 }

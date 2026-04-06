@@ -1691,6 +1691,7 @@ export async function revokeReviewLink(formData: FormData) {
 
 export async function extendDeadline(formData: FormData) {
   const assignmentId = normalizeText(formData.get("assignmentId"));
+  const termId = normalizeText(formData.get("termId"));
   const newDueAt = normalizeText(formData.get("newDueAt"));
 
   const supabase = await createClient();
@@ -1704,14 +1705,18 @@ export async function extendDeadline(formData: FormData) {
 
   await requireAdminAccess(supabase, user.id);
 
-  if (!assignmentId || !newDueAt) {
-    redirect("/dashboard?error=" + encodeMessage("Assignment or date missing."));
+  if (!assignmentId || !termId || !newDueAt) {
+    redirect("/dashboard?error=" + encodeMessage("Assignment, term, or date missing."));
   }
 
   const { error } = await supabase
-    .from("assignments")
-    .update({ due_at: new Date(newDueAt).toISOString() })
-    .eq("id", assignmentId);
+    .from("term_assignment_schedule")
+    .update({
+      current_due_at: new Date(newDueAt).toISOString(),
+      revised_at: new Date().toISOString(),
+    })
+    .eq("term_id", termId)
+    .eq("assignment_id", assignmentId);
 
   if (error) {
     redirect(`/assignments/${assignmentId}?error=${encodeMessage(error.message)}`);

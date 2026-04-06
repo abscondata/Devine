@@ -37,6 +37,29 @@ export interface Database {
         };
         Relationships: [];
       };
+      term_assignment_schedule: {
+        Row: {
+          term_id: string;
+          assignment_id: string;
+          default_due_at: string;
+          current_due_at: string;
+          revised_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          term_id: string;
+          assignment_id: string;
+          default_due_at: string;
+          current_due_at: string;
+          revised_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          current_due_at?: string;
+          revised_at?: string | null;
+        };
+        Relationships: [];
+      };
       term_courses: {
         Row: {
           term_id: string;

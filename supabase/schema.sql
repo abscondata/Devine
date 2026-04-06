@@ -50,6 +50,17 @@ alter table program_members
 
 create index if not exists idx_program_members_user on program_members(user_id);
 
+-- Term-specific assignment schedule: separates term pacing from canonical course data.
+create table if not exists term_assignment_schedule (
+  term_id uuid not null references academic_terms(id) on delete cascade,
+  assignment_id uuid not null references assignments(id) on delete cascade,
+  default_due_at timestamptz not null,
+  current_due_at timestamptz not null,
+  revised_at timestamptz,
+  created_at timestamptz not null default now(),
+  primary key (term_id, assignment_id)
+);
+
 -- Explicit enrollment state: which course the student is currently studying.
 -- NULL means infer from sequence position (backward-compatible).
 alter table program_members add column if not exists current_course_id uuid references courses(id) on delete set null;

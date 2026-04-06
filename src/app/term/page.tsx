@@ -11,9 +11,10 @@ import {
 import {
   computeTermSchedule,
   computeReadingTargetDate,
-  computeWorkDueDate,
+  getEffectiveDueDate,
   formatScheduleDate,
   isPast,
+  type TermAssignmentScheduleRow,
 } from "@/lib/term-schedule";
 
 export default async function TermPage() {
@@ -124,6 +125,14 @@ export default async function TermPage() {
 
   const assignmentStatus = buildAssignmentStatusMap(submissions ?? [], critiques ?? []);
   const finalSet = getFinalAssignmentSet(assignmentStatus);
+
+  // Term schedule rows
+  const { data: scheduleRows } = await supabase
+    .from("term_assignment_schedule")
+    .select("assignment_id, default_due_at, current_due_at, revised_at")
+    .eq("term_id", currentTerm.id);
+  const scheduleByAssignment = new Map<string, TermAssignmentScheduleRow>();
+  (scheduleRows ?? []).forEach((row) => scheduleByAssignment.set(row.assignment_id, row));
 
   // Maps
   type ReadingRow = NonNullable<typeof readings>[number];
@@ -290,12 +299,12 @@ export default async function TermPage() {
                           <ol className="space-y-0.5 text-sm">
                             {unit.assignments.map((a) => {
                               const isFinal = finalSet.has(a.id);
-                              const dueDate = unit.startsAt && unit.endsAt
-                                ? computeWorkDueDate({
-                                    unitSchedule: { moduleId: unit.id, position: unit.position, startsAt: unit.startsAt, endsAt: unit.endsAt },
-                                    explicitDueAt: a.due_at,
-                                  })
+                              const schedRow = scheduleByAssignment.get(a.id);
+                              const unitSched = unit.startsAt && unit.endsAt
+                                ? { moduleId: unit.id, position: unit.position, startsAt: unit.startsAt, endsAt: unit.endsAt }
                                 : null;
+                              const effective = getEffectiveDueDate({ termScheduleRow: schedRow, canonicalDueAt: a.due_at, unitSchedule: unitSched });
+                              const dueDate = effective?.date ?? null;
                               return (
                                 <li key={a.id} className="flex items-center justify-between gap-3">
                                   <Link href={`/assignments/${a.id}`} className={`hover:text-[var(--text)] ${isFinal ? "line-through opacity-50 text-[var(--muted)]" : "font-semibold"}`}>
@@ -303,7 +312,7 @@ export default async function TermPage() {
                                   </Link>
                                   {dueDate ? (
                                     <span className={`text-xs uppercase tracking-[0.2em] shrink-0 ${!isFinal && isPast(dueDate) ? "text-[var(--danger)]" : "text-[var(--muted)]"}`}>
-                                      {isFinal ? "Submitted" : formatScheduleDate(dueDate)}
+                                      {isFinal ? "Submitted" : `${formatScheduleDate(dueDate)}${effective?.isRevised ? " · Revised" : ""}`}
                                     </span>
                                   ) : null}
                                 </li>

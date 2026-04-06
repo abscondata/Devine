@@ -17,10 +17,11 @@ import {
 import {
   computeTermSchedule,
   computeReadingTargetDate,
-  computeWorkDueDate,
+  getEffectiveDueDate,
   formatScheduleDate,
   isDueThisWeek,
   isPast,
+  type TermAssignmentScheduleRow,
 } from "@/lib/term-schedule";
 
 function formatDate(value: string | null | undefined) {
@@ -133,6 +134,16 @@ export default async function DashboardPage() {
 
   const assignmentStatus = buildAssignmentStatusMap(submissions ?? [], critiques ?? []);
   const finalSet = getFinalAssignmentSet(assignmentStatus);
+
+  // ─── TERM SCHEDULE ROWS ───
+  const { data: scheduleRows } = currentTerm
+    ? await supabase
+        .from("term_assignment_schedule")
+        .select("assignment_id, default_due_at, current_due_at, revised_at")
+        .eq("term_id", currentTerm.id)
+    : { data: [] as TermAssignmentScheduleRow[] };
+  const scheduleByAssignment = new Map<string, TermAssignmentScheduleRow>();
+  (scheduleRows ?? []).forEach((row) => scheduleByAssignment.set(row.assignment_id, row));
 
   // ─── BUILD PER-MODULE MAPS ───
   type ReadingRow = NonNullable<typeof readings>[number];
@@ -281,12 +292,16 @@ export default async function DashboardPage() {
     return a.targetDate.getTime() - b.targetDate.getTime();
   });
 
-  // Enrich writing queue with computed due dates
+  // Enrich writing queue with due dates from term schedule > canonical > computed
   const enrichedWork = allOpenWork.map((a) => {
-    const unitSched = schedule?.unitSchedules.get(a.module_id);
-    if (!unitSched) return { ...a, computedDue: a.due_at ? new Date(a.due_at) : null as Date | null };
-    const computedDue = computeWorkDueDate({ unitSchedule: unitSched, explicitDueAt: a.due_at });
-    return { ...a, computedDue };
+    const schedRow = scheduleByAssignment.get(a.id);
+    const unitSched = schedule?.unitSchedules.get(a.module_id) ?? null;
+    const effective = getEffectiveDueDate({
+      termScheduleRow: schedRow,
+      canonicalDueAt: a.due_at,
+      unitSchedule: unitSched,
+    });
+    return { ...a, computedDue: effective?.date ?? null, isRevised: effective?.isRevised ?? false, defaultDate: effective?.defaultDate };
   });
   enrichedWork.sort((a, b) => {
     if (!a.computedDue && !b.computedDue) return 0;
@@ -479,7 +494,9 @@ export default async function DashboardPage() {
                     <p className="text-xs text-[var(--muted)]">{a.courseCode} · {a.assignment_type?.replace(/_/g, " ")}</p>
                   </div>
                   {a.computedDue ? (
-                    <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] shrink-0">{formatScheduleDate(a.computedDue)}</span>
+                    <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] shrink-0">
+                      {formatScheduleDate(a.computedDue)}{a.isRevised ? " · Revised" : ""}
+                    </span>
                   ) : null}
                 </Link>
               ))}
