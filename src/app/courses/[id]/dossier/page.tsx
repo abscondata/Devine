@@ -1,26 +1,21 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
   buildAssignmentStatusMap,
   getCourseStanding,
-  getModuleNextAction,
+  getStandingStatus,
   getModuleStanding,
-  getStandingLabel,
 } from "@/lib/academic-standing";
 import {
   buildMissingThesisSummary,
   buildThesisSummaryByCourseId,
 } from "@/lib/thesis-governance";
-import { ReviewShell } from "@/components/review-shell";
-import { DocumentSection, FormalDocumentLayout } from "@/components/formal-document";
+import { ProtectedShell } from "@/components/protected-shell";
 
 function formatDate(value?: string | null) {
   if (!value) return "—";
-  return new Date(value).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return new Date(value).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
 
 export default async function CourseDossierPage({
@@ -30,433 +25,242 @@ export default async function CourseDossierPage({
 }) {
   const { id } = await params;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
 
   const { data: course } = await supabase
     .from("courses")
-    .select(
-      "id, title, description, code, credits_or_weight, level, learning_outcomes, syllabus, status, sequence_position, program:programs(id, title), domain:domains(id, title, code)"
-    )
+    .select("id, title, description, code, credits_or_weight, level, learning_outcomes, syllabus, status, program:programs(id, title), domain:domains(id, title)")
     .eq("id", id)
     .single();
+  if (!course) notFound();
 
-  if (!course) {
-    notFound();
-  }
+  const { data: requirementMappings } = await supabase.from("course_requirement_blocks").select("requirement_block:requirement_block_id(id, title, category)").eq("course_id", id);
+  const requirementBlocks = (requirementMappings ?? []).map((item) => item.requirement_block).filter(Boolean);
 
-  const { data: requirementMappings } = await supabase
-    .from("course_requirement_blocks")
-    .select("requirement_block:requirement_block_id(id, title, category)")
-    .eq("course_id", id);
+  const { data: prereqs } = await supabase.from("course_prerequisites").select("prerequisite:prerequisite_course_id(id, title, code)").eq("course_id", id);
+  const prerequisiteCourses = (prereqs ?? []).map((p) => p.prerequisite).filter(Boolean);
 
-  const requirementBlocks = (requirementMappings ?? [])
-    .map((item) => item.requirement_block)
-    .filter(Boolean);
-
-  const { data: modules } = await supabase
-    .from("modules")
-    .select("id, title, overview, position")
-    .eq("course_id", id)
-    .order("position", { ascending: true });
-
-  const moduleIds = modules?.map((module) => module.id) ?? [];
+  const { data: modules } = await supabase.from("modules").select("id, title, overview, position").eq("course_id", id).order("position", { ascending: true });
+  const moduleIds = (modules ?? []).map((m) => m.id);
 
   const { data: readings } = moduleIds.length
-    ? await supabase
-        .from("readings")
-        .select(
-          "id, module_id, title, author, source_type, primary_or_secondary, tradition_or_era, pages_or_length, estimated_hours, reference_url_or_citation, status, position"
-        )
-        .in("module_id", moduleIds)
-        .order("position", { ascending: true })
+    ? await supabase.from("readings").select("id, module_id, title, author, source_type, primary_or_secondary, tradition_or_era, pages_or_length, estimated_hours, status, position").in("module_id", moduleIds).order("position", { ascending: true })
     : { data: [] };
 
   const { data: assignments } = moduleIds.length
-    ? await supabase
-        .from("assignments")
-        .select("id, module_id, title, assignment_type, due_at")
-        .in("module_id", moduleIds)
-        .order("due_at", { ascending: true })
+    ? await supabase.from("assignments").select("id, module_id, title, assignment_type").in("module_id", moduleIds)
     : { data: [] };
 
-  const assignmentIds = assignments?.map((assignment) => assignment.id) ?? [];
-  const { data: submissions } = assignmentIds.length
-    ? await supabase
-        .from("submissions")
-        .select("id, assignment_id, is_final, created_at")
-        .eq("user_id", user.id)
-        .in("assignment_id", assignmentIds)
+  const aIds = (assignments ?? []).map((a) => a.id);
+  const { data: submissions } = aIds.length
+    ? await supabase.from("submissions").select("id, assignment_id, version, is_final, created_at").eq("user_id", user.id).in("assignment_id", aIds).order("version", { ascending: false })
+    : { data: [] };
+  const finalSubs = (submissions ?? []).filter((s) => s.is_final);
+  const finalSubIds = finalSubs.map((s) => s.id);
+  const { data: critiques } = finalSubIds.length
+    ? await supabase.from("critiques").select("id, submission_id").in("submission_id", finalSubIds)
     : { data: [] };
 
-  const finalSubmissions = (submissions ?? []).filter((submission) => submission.is_final);
-  const finalSubmissionIds = finalSubmissions.map((submission) => submission.id);
-
-  const { data: critiques } = finalSubmissionIds.length
-    ? await supabase
-        .from("critiques")
-        .select("id, submission_id")
-        .in("submission_id", finalSubmissionIds)
-    : { data: [] };
-
-  const { data: thesisProjects } = await supabase
-    .from("thesis_projects")
-    .select(
-      "id, program_id, course_id, title, research_question, governing_problem, thesis_claim, scope_statement, status, opened_at, candidacy_established_at, prospectus_locked_at, final_submitted_at"
-    )
-    .eq("course_id", course.id);
-
-  const thesisProjectIds = thesisProjects?.map((project) => project.id) ?? [];
-  const { data: thesisMilestones } = thesisProjectIds.length
-    ? await supabase
-        .from("thesis_milestones")
-        .select(
-          "id, thesis_project_id, milestone_key, title, position, required, completed_at, submission_id"
-        )
-        .in("thesis_project_id", thesisProjectIds)
+  const { data: thesisProjects } = await supabase.from("thesis_projects").select("id, program_id, course_id, title, research_question, governing_problem, thesis_claim, scope_statement, status, opened_at, candidacy_established_at, prospectus_locked_at, final_submitted_at").eq("course_id", id);
+  const tpIds = (thesisProjects ?? []).map((p) => p.id);
+  const { data: thesisMilestones } = tpIds.length
+    ? await supabase.from("thesis_milestones").select("id, thesis_project_id, milestone_key, title, position, required, completed_at, submission_id").in("thesis_project_id", tpIds)
     : { data: [] };
 
   const assignmentStatus = buildAssignmentStatusMap(submissions ?? [], critiques ?? []);
-  const thesisSummaryByCourseId = buildThesisSummaryByCourseId({
-    projects: thesisProjects ?? [],
-    milestones: thesisMilestones ?? [],
-    finalSubmissionIds: new Set(finalSubmissionIds),
-  });
+  const thesisSummaryByCourseId = buildThesisSummaryByCourseId({ projects: thesisProjects ?? [], milestones: thesisMilestones ?? [], finalSubmissionIds: new Set(finalSubIds) });
 
-  const readingsByModule = new Map<string, typeof readings>();
-  readings?.forEach((reading) => {
-    const list = readingsByModule.get(reading.module_id) ?? [];
-    list.push(reading);
-    readingsByModule.set(reading.module_id, list);
-  });
+  type RR = NonNullable<typeof readings>[number];
+  type AR = NonNullable<typeof assignments>[number];
+  const readingsByModule = new Map<string, RR[]>();
+  (readings ?? []).forEach((r) => { const l = readingsByModule.get(r.module_id) ?? []; l.push(r); readingsByModule.set(r.module_id, l); });
+  const assignmentsByModule = new Map<string, AR[]>();
+  (assignments ?? []).forEach((a) => { const l = assignmentsByModule.get(a.module_id) ?? []; l.push(a); assignmentsByModule.set(a.module_id, l); });
 
-  const assignmentsByModule = new Map<string, typeof assignments>();
-  assignments?.forEach((assignment) => {
-    const list = assignmentsByModule.get(assignment.module_id) ?? [];
-    list.push(assignment);
-    assignmentsByModule.set(assignment.module_id, list);
-  });
+  const critiqueSet = new Set((critiques ?? []).map((c) => c.submission_id));
+  type SubRow = NonNullable<typeof submissions>[number];
+  const subsByAssignment = new Map<string, SubRow[]>();
+  (submissions ?? []).forEach((s) => { const l = subsByAssignment.get(s.assignment_id) ?? []; l.push(s); subsByAssignment.set(s.assignment_id, l); });
 
-  const moduleSummaries = (modules ?? []).map((module) => {
-    const moduleReadings = readingsByModule.get(module.id) ?? [];
-    const moduleAssignments = assignmentsByModule.get(module.id) ?? [];
-    const moduleStanding = getModuleStanding({
-      readings: moduleReadings,
-      assignments: moduleAssignments,
-      assignmentStatus,
-    });
-    const nextAction = getModuleNextAction({
-      readings: moduleReadings,
-      assignments: moduleAssignments,
-      assignmentStatus,
-    });
-    return {
-      ...module,
-      readings: moduleReadings,
-      assignments: moduleAssignments,
-      standing: moduleStanding,
-      nextAction,
-    };
-  });
+  const thesisSummary = course.code === "RSYN 720" ? thesisSummaryByCourseId.get(course.id) ?? buildMissingThesisSummary() : null;
+  const standing = getCourseStanding({ modules: modules ?? [], readingsByModule, assignmentsByModule, assignmentStatus, thesisSummary });
+  const status = getStandingStatus(standing.completion);
+  const isComplete = status === "completed";
 
-  const courseStanding = getCourseStanding({
-    modules: modules ?? [],
-    readingsByModule,
-    assignmentsByModule,
-    assignmentStatus,
-    thesisSummary:
-      course.code === "RSYN 720"
-        ? thesisSummaryByCourseId.get(course.id) ?? buildMissingThesisSummary()
-        : null,
-  });
+  const totalReadings = (readings ?? []).length;
+  const completedReadings = (readings ?? []).filter((r) => r.status === "complete").length;
+  const totalHours = (readings ?? []).reduce((s, r) => s + (r.estimated_hours ?? 0), 0);
+  const totalFinals = finalSubs.length;
+  const totalCritiqued = finalSubs.filter((s) => critiqueSet.has(s.id)).length;
+  const now = formatDate(new Date().toISOString());
 
-  const totalTasks = courseStanding.completion.totalTasks;
-  const completedTasks = courseStanding.completion.completedTasks;
-  const { unreadReadings, skippedReadings, missingFinals } =
-    courseStanding.completion;
-  const { totalAssignments, finalAssignments, draftAssignments } =
-    courseStanding.assignmentSummary;
-  const courseStatus = getStandingLabel(
-    courseStanding.completion.isComplete
-      ? "completed"
-      : completedTasks > 0
-      ? "in_progress"
-      : "not_started"
-  );
-
-  const nextModule = moduleSummaries.find(
-    (module) =>
-      module.standing.completion.totalTasks > 0 &&
-      module.standing.completion.completedTasks <
-        module.standing.completion.totalTasks
-  );
-
-  const recordDate = formatDate(new Date().toISOString());
+  // Group readings by source type for materials section
+  const sourceOrder = ["Primary text", "Magisterial text", "Scripture", "Patristic text", "Conciliar text", "Historical text", "Secondary text"];
+  const bySource = new Map<string, RR[]>();
+  (readings ?? []).forEach((r) => { const k = r.source_type ?? "Other"; const l = bySource.get(k) ?? []; l.push(r); bySource.set(k, l); });
+  const seen = new Set<string>();
+  const uniqueReadings = (readings ?? []).filter((r) => { const k = `${r.author}|${r.title}`; if (seen.has(k)) return false; seen.add(k); return true; });
+  const orderedSources = [...sourceOrder.filter((s) => bySource.has(s)), ...Array.from(bySource.keys()).filter((s) => !sourceOrder.includes(s))];
 
   return (
-    <ReviewShell userEmail={user.email ?? null}>
-      <FormalDocumentLayout
-        backLink={{ href: `/courses/${course.id}`, label: "Course" }}
-        documentType="Course Dossier"
-        title={`${course.code ? `${course.code} — ` : ""}${course.title}`}
-        description={course.description ?? "No course description recorded."}
-        recordDate={recordDate}
-      >
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3 text-sm text-[var(--muted)]">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                Program
-              </p>
-              <p>{course.program?.title ?? "—"}</p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                Domain
-              </p>
-              <p>
-                {course.domain
-                  ? `${course.domain.code ? `${course.domain.code} — ` : ""}${course.domain.title}`
-                  : "—"}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                Standing
-              </p>
-              <p className="text-[var(--text)]">{courseStatus}</p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                Status
-              </p>
-              <p>{course.status}</p>
-            </div>
+    <ProtectedShell userEmail={user.email ?? null}>
+      <div className="space-y-8 max-w-4xl print:max-w-none">
+
+        <header className="space-y-4 border-b border-[var(--border)] pb-6">
+          <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)] print:hidden">
+            <Link href={`/courses/${course.id}`}>Course</Link>
           </div>
-          <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-            {completedTasks} of {totalTasks} requirements fulfilled · {finalAssignments} of {totalAssignments} final submissions
+          <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
+            {course.program?.title ?? "Program"} · Course Dossier
+          </p>
+          <h1 className="text-3xl">{course.code ? `${course.code} — ` : ""}{course.title}</h1>
+          <div className="flex flex-wrap gap-x-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            {course.level ? <span>{course.level}</span> : null}
+            {course.credits_or_weight ? <span>{course.credits_or_weight} credits</span> : null}
+            {course.domain?.title ? <span>{course.domain.title}</span> : null}
+            <span>{isComplete ? "Complete" : status === "in_progress" ? "In progress" : "Not started"}</span>
           </div>
-            {requirementBlocks.length ? (
-            <div className="pt-2 text-sm text-[var(--muted)]">
-              Requirement blocks:{" "}
-              {requirementBlocks
-                .map((block) => `${block.title}${block.category ? ` (${block.category})` : ""}`)
-                .join(" · ")}
-            </div>
-          ) : null}
-        </div>
+          <p className="text-xs text-[var(--muted)]">Generated {now}</p>
+        </header>
 
-        <DocumentSection title="Official Completion">
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-2 text-sm text-[var(--muted)]">
-            <p>
-              Official completion requires all readings marked complete (skipped
-              readings do not count) and final submissions for every assignment.
-              Critiques are recommended but do not determine completion. RSYN 720
-              additionally requires an active thesis project with all required
-              milestones complete.
-            </p>
-            {unreadReadings === 0 &&
-            skippedReadings === 0 &&
-            missingFinals === 0 &&
-            !courseStanding.completion.thesisIncomplete ? (
-              <p className="text-sm font-semibold text-[var(--text)]">
-                This course is officially complete.
-              </p>
-            ) : (
-              <ul className="list-disc pl-5 text-[var(--muted)]">
-                {unreadReadings > 0 ? (
-                  <li>
-                    {unreadReadings} reading{unreadReadings === 1 ? "" : "s"} not complete
-                  </li>
-                ) : null}
-                {skippedReadings > 0 ? (
-                  <li>
-                    {skippedReadings} reading{skippedReadings === 1 ? "" : "s"} skipped (do not count)
-                  </li>
-                ) : null}
-                {missingFinals > 0 ? (
-                  <li>
-                    {missingFinals} assignment{missingFinals === 1 ? "" : "s"} missing final submission
-                  </li>
-                ) : null}
-                {courseStanding.completion.thesisIncomplete ? (
-                  <li>
-                    {courseStanding.thesis?.hasProject
-                      ? "Thesis milestones remain incomplete."
-                      : "No thesis project recorded for RSYN 720."}
-                  </li>
-                ) : null}
-              </ul>
-            )}
-          </div>
-        </DocumentSection>
-
-        <DocumentSection title="Current Work">
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm text-[var(--muted)] space-y-2">
-            {nextModule ? (
-              <>
-                <p className="text-sm font-semibold text-[var(--text)]">
-                  Continue module {nextModule.position + 1}: {nextModule.title}
-                </p>
-                {nextModule.nextAction ? (
-                  <>
-                    <p>{nextModule.nextAction.title}</p>
-                    <p>{nextModule.nextAction.reason}</p>
-                  </>
-                ) : (
-                  <p>All required work in this module is complete.</p>
-                )}
-              </>
-            ) : (
-              <p>No incomplete modules remain in this course.</p>
-            )}
-          </div>
-        </DocumentSection>
-
-        <DocumentSection title="Module Sequence">
-          {moduleSummaries.length ? (
-            <div className="space-y-8">
-              {moduleSummaries.map((module) => (
-                <div key={module.id} className="space-y-4">
-                  <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-2">
-                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                      Module {module.position + 1}
-                    </p>
-                    <h3 className="text-lg font-semibold">{module.title}</h3>
-                    <p className="text-sm text-[var(--muted)]">
-                      {module.overview ?? ""}
-                    </p>
-                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                      {module.standing.completion.completedTasks} of {module.standing.completion.totalTasks} requirements fulfilled
-                    </p>
-                  </div>
-
-                  <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
-                    <h4 className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-                      Readings
-                    </h4>
-                    {module.readings.length ? (
-                      <div className="space-y-3 text-sm text-[var(--muted)]">
-                        {module.readings.map((reading) => (
-                          <div
-                            key={reading.id}
-                            className="flex flex-col gap-1 border-b border-[var(--border)] pb-3 last:border-b-0 last:pb-0"
-                          >
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <span>
-                                {reading.title}
-                                {reading.author ? ` — ${reading.author}` : ""}
-                              </span>
-                              <span className="text-xs uppercase tracking-[0.2em]">
-                                {reading.status.replace(/_/g, " ")}
-                              </span>
-                            </div>
-                            <div className="text-xs text-[var(--muted)]">
-                              {[reading.source_type, reading.primary_or_secondary, reading.tradition_or_era]
-                                .filter(Boolean)
-                                .join(" · ")}
-                            </div>
-                            {reading.pages_or_length ? (
-                              <div className="text-xs text-[var(--muted)]">
-                                {reading.pages_or_length}
-                                {reading.estimated_hours
-                                  ? ` · ${reading.estimated_hours} hr`
-                                  : ""}
-                              </div>
-                            ) : null}
-                            {reading.reference_url_or_citation ? (
-                              <div className="text-xs text-[var(--muted)]">
-                                {reading.reference_url_or_citation}
-                              </div>
-                            ) : null}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-[var(--muted)]">
-                        No readings recorded.
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
-                    <h4 className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-                      Assignments
-                    </h4>
-                    {module.assignments.length ? (
-                      <div className="space-y-3 text-sm text-[var(--muted)]">
-                        {module.assignments.map((assignment) => {
-                          const status = assignmentStatus.get(assignment.id);
-                          const label = status?.hasFinal
-                            ? status.hasCritique
-                              ? "Final · Critiqued"
-                              : "Final · Critique pending"
-                            : status?.hasDraft
-                            ? "Draft only"
-                            : "No submission";
-                          return (
-                            <div
-                              key={assignment.id}
-                              className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] pb-3 last:border-b-0 last:pb-0"
-                            >
-                              <span>
-                                {assignment.title} ·{" "}
-                                {assignment.assignment_type.replace(/_/g, " ")}
-                              </span>
-                              <span className="text-xs uppercase tracking-[0.2em]">
-                                {assignment.due_at
-                                  ? formatDate(assignment.due_at)
-                                  : "No deadline"}
-                              </span>
-                              <span className="text-xs uppercase tracking-[0.2em]">
-                                {label}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-[var(--muted)]">
-                        No assignments recorded.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)]">
-              No modules recorded for this course.
-            </div>
-          )}
-        </DocumentSection>
-
-        {course.learning_outcomes || course.syllabus ? (
-          <DocumentSection title="Course Documentation">
-            {course.learning_outcomes ? (
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-2 text-sm text-[var(--muted)]">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Learning Outcomes
-                </p>
-                <p className="whitespace-pre-wrap">{course.learning_outcomes}</p>
-              </div>
-            ) : null}
-            {course.syllabus ? (
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-2 text-sm text-[var(--muted)]">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Syllabus
-                </p>
-                <p className="whitespace-pre-wrap">{course.syllabus}</p>
-              </div>
-            ) : null}
-          </DocumentSection>
+        {/* Description */}
+        {course.description ? (
+          <section className="space-y-2">
+            <h2 className="text-lg">Course Description</h2>
+            <p className="font-serif text-sm leading-relaxed text-[var(--muted)]">{course.description}</p>
+          </section>
         ) : null}
-      </FormalDocumentLayout>
-    </ReviewShell>
+
+        {/* Summary */}
+        <section className="space-y-3">
+          <h2 className="text-lg">Academic Summary</h2>
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
+            <div className="flex flex-wrap gap-x-8 gap-y-1 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+              <span>{(modules ?? []).length} units</span>
+              <span>Readings: {completedReadings} of {totalReadings} complete</span>
+              <span>Estimated: {totalHours.toFixed(1)}h</span>
+              <span>Final submissions: {totalFinals} of {(assignments ?? []).length}</span>
+              <span>Critiqued: {totalCritiqued}</span>
+            </div>
+            {prerequisiteCourses.length ? (
+              <div className="space-y-1">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Prerequisites</p>
+                <p className="text-sm text-[var(--muted)]">{prerequisiteCourses.map((p) => p.code ? `${p.code} — ${p.title}` : p.title).join("; ")}</p>
+              </div>
+            ) : null}
+            {requirementBlocks.length ? (
+              <div className="space-y-1">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Satisfies</p>
+                <p className="text-sm text-[var(--muted)]">{requirementBlocks.map((b) => b.title).join("; ")}</p>
+              </div>
+            ) : null}
+          </div>
+        </section>
+
+        {/* Required materials */}
+        {uniqueReadings.length > 0 ? (
+          <section className="space-y-3">
+            <h2 className="text-lg">Required Materials</h2>
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
+              {orderedSources.map((sourceType) => {
+                const seenInGroup = new Set<string>();
+                const items = (bySource.get(sourceType) ?? []).filter((r) => { const k = `${r.author}|${r.title}`; if (seenInGroup.has(k)) return false; seenInGroup.add(k); return true; });
+                if (!items.length) return null;
+                return (
+                  <div key={sourceType} className="p-5 space-y-1">
+                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">{sourceType}</p>
+                    <ul className="space-y-0.5 text-sm text-[var(--muted)]">
+                      {items.map((r) => (
+                        <li key={r.id}>
+                          {r.author ? <span className="font-semibold">{r.author}</span> : null}
+                          {r.author && r.title ? ", " : null}
+                          {r.title ? <span className="font-serif italic">{r.title}</span> : null}
+                          {r.pages_or_length ? ` (${r.pages_or_length})` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+
+        {/* Unit-by-unit record */}
+        {(modules ?? []).map((mod) => {
+          const unitReadings = readingsByModule.get(mod.id) ?? [];
+          const unitAssignments = assignmentsByModule.get(mod.id) ?? [];
+          return (
+            <section key={mod.id} className="space-y-3">
+              <div className="border-b border-[var(--border)] pb-2">
+                <h2 className="text-base font-semibold">Unit {mod.position + 1}: {mod.title}</h2>
+              </div>
+              {unitReadings.length > 0 ? (
+                <div className="space-y-1">
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Readings</p>
+                  <ul className="space-y-0.5 text-sm text-[var(--muted)]">
+                    {unitReadings.sort((a, b) => (a.position ?? 0) - (b.position ?? 0)).map((r) => (
+                      <li key={r.id} className={r.status === "complete" ? "line-through opacity-50" : ""}>
+                        {r.author ? `${r.author}, ` : ""}{r.title}
+                        <span className="text-xs uppercase tracking-[0.2em]"> · {r.status === "complete" ? "Complete" : r.status?.replace(/_/g, " ") ?? ""}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {unitAssignments.length > 0 ? (
+                <div className="space-y-1">
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Written work</p>
+                  <ul className="space-y-1 text-sm">
+                    {unitAssignments.map((a) => {
+                      const aStatus = assignmentStatus.get(a.id);
+                      const subs = subsByAssignment.get(a.id) ?? [];
+                      const finalSub = subs.find((s) => s.is_final);
+                      const hasCrit = finalSub ? critiqueSet.has(finalSub.id) : false;
+                      return (
+                        <li key={a.id} className={aStatus?.hasFinal ? "text-[var(--muted)]" : "font-semibold"}>
+                          {a.title}
+                          <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                            {" "}· {a.assignment_type.replace(/_/g, " ")}
+                            {aStatus?.hasFinal ? ` · Final v${finalSub?.version} · ${formatDate(finalSub?.created_at)}` : aStatus?.hasDraft ? ` · Draft v${subs[0]?.version}` : " · Not submitted"}
+                            {hasCrit ? " · Critiqued" : ""}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ) : null}
+            </section>
+          );
+        })}
+
+        {/* Syllabus / outcomes */}
+        {(course.syllabus || course.learning_outcomes) ? (
+          <section className="space-y-3">
+            <h2 className="text-lg">Course Information</h2>
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-4">
+              {course.syllabus ? (
+                <div className="space-y-1">
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Syllabus</p>
+                  <p className="text-sm text-[var(--muted)] whitespace-pre-wrap">{course.syllabus}</p>
+                </div>
+              ) : null}
+              {course.learning_outcomes ? (
+                <div className="space-y-1">
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Learning outcomes</p>
+                  <p className="text-sm text-[var(--muted)] whitespace-pre-wrap">{course.learning_outcomes}</p>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
+        <footer className="border-t border-[var(--border)] pt-4 text-xs text-[var(--muted)]">
+          <p>{course.program?.title ?? "Program"} · {course.code} · Course dossier generated {now}</p>
+        </footer>
+      </div>
+    </ProtectedShell>
   );
 }

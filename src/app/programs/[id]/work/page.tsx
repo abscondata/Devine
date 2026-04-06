@@ -146,18 +146,18 @@ export default async function ProgramWorkPage({
 
   return (
     <ProtectedShell userEmail={user.email ?? null}>
-      <div className="space-y-8">
+      <div className="space-y-8 max-w-4xl print:max-w-none">
 
-        <header className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+        <header className="space-y-4 border-b border-[var(--border)] pb-6">
+          <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)] print:hidden">
             <Link href="/dashboard">My Term</Link>
             <span>/</span>
             <Link href={`/programs/${program.id}/record`}>Record</Link>
           </div>
-          <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-            {program.title}
+          <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
+            {program.title} · Writing Dossier
           </p>
-          <h1 className="text-3xl">Submission Archive</h1>
+          <h1 className="text-3xl">Academic Writing Record</h1>
           <div className="flex flex-wrap items-center gap-x-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
             <span>{workItems.length} assignments</span>
             <span>{finalCount} finalized</span>
@@ -202,6 +202,10 @@ export default async function ProgramWorkPage({
         {!workItems.length ? (
           <p className="text-sm text-[var(--muted)]">No written work assigned yet.</p>
         ) : null}
+
+        <footer className="border-t border-[var(--border)] pt-4 text-xs text-[var(--muted)]">
+          <p>{program.title} · Writing dossier · {workItems.length} assignments · {finalCount} finalized · {critiquedCount} critiqued</p>
+        </footer>
       </div>
     </ProtectedShell>
   );
