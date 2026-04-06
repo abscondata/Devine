@@ -17,13 +17,13 @@ export function AdminShell({
               Devine Academic Administration
             </Link>
             <nav className="flex items-center gap-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              <Link href="/admin/thesis" className="hover:text-[var(--text)]">
-                Thesis governance
+              <Link href="/admin/terms" className="hover:text-[var(--text)]">
+                Terms
               </Link>
-              <Link
-                href="/admin/review-links"
-                className="hover:text-[var(--text)]"
-              >
+              <Link href="/admin/thesis" className="hover:text-[var(--text)]">
+                Thesis
+              </Link>
+              <Link href="/admin/review-links" className="hover:text-[var(--text)]">
                 Review access
               </Link>
             </nav>

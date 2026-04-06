@@ -1772,3 +1772,140 @@ export async function setCurrentCourseEnrollment(formData: FormData) {
   revalidatePath("/dashboard");
   redirect("/dashboard");
 }
+
+// ─── TERM GOVERNANCE ───
+
+export async function createTerm(formData: FormData) {
+  const programId = normalizeText(formData.get("programId"));
+  const title = normalizeText(formData.get("title"));
+  const startsAt = normalizeText(formData.get("startsAt"));
+  const endsAt = normalizeText(formData.get("endsAt"));
+  const makeCurrent = Boolean(formData.get("makeCurrent"));
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  await requireAdminAccess(supabase, user.id);
+
+  if (!programId || !title) {
+    redirect("/admin/terms?error=" + encodeMessage("Program and title required."));
+  }
+
+  if (makeCurrent) {
+    await supabase.from("academic_terms").update({ is_current: false }).eq("program_id", programId);
+  }
+
+  const { error } = await supabase.from("academic_terms").insert({
+    program_id: programId,
+    title,
+    starts_at: startsAt || null,
+    ends_at: endsAt || null,
+    is_current: makeCurrent,
+  });
+
+  if (error) redirect("/admin/terms?error=" + encodeMessage(error.message));
+  revalidatePath("/admin/terms");
+  redirect("/admin/terms");
+}
+
+export async function setCurrentTerm(formData: FormData) {
+  const termId = normalizeText(formData.get("termId"));
+  const programId = normalizeText(formData.get("programId"));
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  await requireAdminAccess(supabase, user.id);
+
+  if (!termId || !programId) redirect("/admin/terms?error=" + encodeMessage("Term and program required."));
+
+  await supabase.from("academic_terms").update({ is_current: false }).eq("program_id", programId);
+  await supabase.from("academic_terms").update({ is_current: true }).eq("id", termId);
+
+  revalidatePath("/admin/terms");
+  revalidatePath("/dashboard");
+  redirect("/admin/terms");
+}
+
+export async function addTermCourse(formData: FormData) {
+  const termId = normalizeText(formData.get("termId"));
+  const courseId = normalizeText(formData.get("courseId"));
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  await requireAdminAccess(supabase, user.id);
+
+  if (!termId || !courseId) redirect("/admin/terms?error=" + encodeMessage("Term and course required."));
+
+  const { error } = await supabase.from("term_courses").insert({ term_id: termId, course_id: courseId });
+  if (error) redirect("/admin/terms?error=" + encodeMessage(error.message));
+  revalidatePath("/admin/terms");
+  redirect("/admin/terms");
+}
+
+export async function removeTermCourse(formData: FormData) {
+  const termId = normalizeText(formData.get("termId"));
+  const courseId = normalizeText(formData.get("courseId"));
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  await requireAdminAccess(supabase, user.id);
+
+  if (!termId || !courseId) redirect("/admin/terms?error=" + encodeMessage("Term and course required."));
+
+  await supabase.from("term_courses").delete().eq("term_id", termId).eq("course_id", courseId);
+  revalidatePath("/admin/terms");
+  redirect("/admin/terms");
+}
+
+export async function materializeSchedule(formData: FormData) {
+  const termId = normalizeText(formData.get("termId"));
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  await requireAdminAccess(supabase, user.id);
+
+  if (!termId) redirect("/admin/terms?error=" + encodeMessage("Term required."));
+
+  const { data: term } = await supabase.from("academic_terms").select("id, starts_at, ends_at").eq("id", termId).single();
+  if (!term?.starts_at || !term?.ends_at) redirect("/admin/terms?error=" + encodeMessage("Term must have start and end dates."));
+
+  const { data: tcRows } = await supabase.from("term_courses").select("course_id").eq("term_id", termId);
+  const tcIds = (tcRows ?? []).map((r) => r.course_id);
+  if (!tcIds.length) redirect("/admin/terms?error=" + encodeMessage("No courses in term."));
+
+  const { data: mods } = await supabase.from("modules").select("id, course_id, position").in("course_id", tcIds).order("position", { ascending: true });
+  const modIds = (mods ?? []).map((m) => m.id);
+  const { data: asgns } = modIds.length
+    ? await supabase.from("assignments").select("id, module_id").in("module_id", modIds)
+    : { data: [] };
+
+  const termStart = new Date(term!.starts_at!);
+  const totalDays = Math.max(1, (new Date(term!.ends_at!).getTime() - termStart.getTime()) / (1000 * 60 * 60 * 24));
+
+  const modCountByCourse = new Map<string, number>();
+  (mods ?? []).forEach((m) => modCountByCourse.set(m.course_id, (modCountByCourse.get(m.course_id) ?? 0) + 1));
+
+  const modEnd = new Map<string, Date>();
+  (mods ?? []).forEach((m) => {
+    const c = modCountByCourse.get(m.course_id) ?? 1;
+    modEnd.set(m.id, new Date(termStart.getTime() + ((m.position + 1) / c) * totalDays * 24 * 60 * 60 * 1000));
+  });
+
+  for (const a of asgns ?? []) {
+    const d = modEnd.get(a.module_id);
+    if (!d) continue;
+    const { data: existing } = await supabase.from("term_assignment_schedule").select("assignment_id").eq("term_id", termId).eq("assignment_id", a.id).maybeSingle();
+    if (!existing) {
+      await supabase.from("term_assignment_schedule").insert({ term_id: termId, assignment_id: a.id, default_due_at: d.toISOString(), current_due_at: d.toISOString() });
+    }
+  }
+
+  revalidatePath("/admin/terms");
+  revalidatePath("/dashboard");
+  revalidatePath("/term");
+  redirect("/admin/terms");
+}
