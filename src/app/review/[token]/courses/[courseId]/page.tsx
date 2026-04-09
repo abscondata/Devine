@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -12,12 +13,11 @@ import {
   buildThesisSummaryByCourseId,
 } from "@/lib/thesis-governance";
 import { getReviewProgram } from "@/lib/review-access";
-import { DocumentSection, FormalDocumentLayout } from "@/components/formal-document";
 
 function formatDate(value?: string | null) {
-  if (!value) return "--";
+  if (!value) return "—";
   return new Date(value).toLocaleDateString("en-US", {
-    month: "short",
+    month: "long",
     day: "numeric",
     year: "numeric",
   });
@@ -194,271 +194,223 @@ export default async function ReviewCourseDossierPage({
         module.standing.completion.totalTasks
   );
 
-  const recordDate = formatDate(new Date().toISOString());
+  const totalReadings = (readings ?? []).length;
+  const completedReadings = (readings ?? []).filter((r) => r.status === "complete").length;
+  const now = formatDate(new Date().toISOString());
 
   return (
-    <FormalDocumentLayout
-      backLink={{ href: `/review/${token}/record`, label: "Academic record" }}
-      documentType="Course Dossier"
-      title={`${course.code ? `${course.code} — ` : ""}${course.title}`}
-      description={course.description ?? "No course description recorded."}
-      recordDate={recordDate}
-      actions={[
-        { href: `/review/${token}/work`, label: "Academic work record" },
-        { href: `/review/${token}/chronology`, label: "Academic chronology" },
-      ]}
-    >
-      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3 text-sm text-[var(--muted)]">
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              Program
-            </p>
-            <p>{program.title ?? "--"}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              Domain
-            </p>
-            <p>
-              {course.domain
-                ? `${course.domain.code ? `${course.domain.code} — ` : ""}${course.domain.title}`
-                : "--"}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              Standing
-            </p>
-            <p className="text-[var(--text)]">{courseStatus}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              Status
-            </p>
-            <p>{course.status}</p>
-          </div>
-        </div>
-        <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-          Progress {completedTasks}/{totalTasks} · Finals {finalAssignments}/{totalAssignments}
-          {draftAssignments ? ` · Drafts ${draftAssignments}` : ""}
-        </div>
-        {requirementBlocks.length ? (
-          <div className="pt-2 text-sm text-[var(--muted)]">
-            Requirement blocks:{" "}
-            {requirementBlocks
-              .map((block) => `${block.title}${block.category ? ` (${block.category})` : ""}`)
-              .join(" · ")}
-          </div>
-        ) : null}
-      </div>
+    <div className="space-y-10 max-w-4xl print:max-w-none">
 
-      <DocumentSection title="Official Completion">
+      {/* ─── Document header ─── */}
+      <header className="space-y-4 border-b border-[var(--border)] pb-6">
+        <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)] print:hidden">
+          <Link href={`/review/${token}`}>Program review packet</Link>
+          <span>/</span>
+          <Link href={`/review/${token}/record`}>Academic record</Link>
+        </div>
+        <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
+          {program.title} · Course Dossier
+        </p>
+        <h1 className="text-3xl">{course.code ? `${course.code} — ` : ""}{course.title}</h1>
+        <div className="flex flex-wrap gap-x-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+          {course.level ? <span>{course.level}</span> : null}
+          {course.credits_or_weight ? <span>{course.credits_or_weight} credits</span> : null}
+          {course.domain?.title ? <span>{course.domain.title}</span> : null}
+          <span>{courseStatus}</span>
+          <span>{completedTasks}/{totalTasks} tasks</span>
+        </div>
+        <p className="text-xs text-[var(--muted)]">Generated {now}</p>
+      </header>
+
+      {/* ─── Course context ─── */}
+      {course.description ? (
+        <section className="space-y-3">
+          <h2 className="text-lg">Course Description</h2>
+          <p className="font-serif text-sm leading-relaxed text-[var(--muted)]">{course.description}</p>
+        </section>
+      ) : null}
+
+      {/* ─── Academic summary ─── */}
+      <section className="space-y-3">
+        <h2 className="text-lg">Academic Summary</h2>
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
+          <div className="flex flex-wrap gap-x-8 gap-y-1 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            <span>{(modules ?? []).length} units</span>
+            <span>Readings: {completedReadings} of {totalReadings} complete</span>
+            <span>Finals: {finalAssignments} of {totalAssignments}</span>
+            {draftAssignments ? <span>Drafts: {draftAssignments}</span> : null}
+          </div>
+          {requirementBlocks.length ? (
+            <div className="space-y-1">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Satisfies</p>
+              <p className="text-sm text-[var(--muted)]">
+                {requirementBlocks.map((b) => `${b.title}${b.category ? ` (${b.category})` : ""}`).join("; ")}
+              </p>
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      {/* ─── Official completion ─── */}
+      <section className="space-y-3">
+        <h2 className="text-lg">Official Completion</h2>
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-2 text-sm text-[var(--muted)]">
-          <p>
-            Official completion requires all readings marked complete (skipped
-            readings do not count) and final submissions for every assignment.
-            Critiques are recommended but do not determine completion. RSYN 720
-            additionally requires an active thesis project with all required
-            milestones complete.
-          </p>
           {unreadReadings === 0 &&
           skippedReadings === 0 &&
           missingFinals === 0 &&
           !courseStanding.completion.thesisIncomplete ? (
-            <p className="text-sm font-semibold text-[var(--text)]">
+            <p className="font-semibold text-[var(--text)]">
               This course is officially complete.
             </p>
           ) : (
-            <ul className="list-disc pl-5 text-[var(--muted)]">
-              {unreadReadings > 0 ? (
-                <li>
-                  {unreadReadings} reading{unreadReadings === 1 ? "" : "s"} not complete
-                </li>
-              ) : null}
-              {skippedReadings > 0 ? (
-                <li>
-                  {skippedReadings} reading{skippedReadings === 1 ? "" : "s"} skipped (do not count)
-                </li>
-              ) : null}
-              {missingFinals > 0 ? (
-                <li>
-                  {missingFinals} assignment{missingFinals === 1 ? "" : "s"} missing final submission
-                </li>
-              ) : null}
-              {courseStanding.completion.thesisIncomplete ? (
-                <li>
-                  {courseStanding.thesis?.hasProject
-                    ? "Thesis milestones remain incomplete."
-                    : "No thesis project recorded for RSYN 720."}
-                </li>
-              ) : null}
-            </ul>
+            <>
+              <p>The following items remain before official completion:</p>
+              <ul className="list-disc pl-5">
+                {unreadReadings > 0 ? (
+                  <li>{unreadReadings} reading{unreadReadings === 1 ? "" : "s"} not complete</li>
+                ) : null}
+                {skippedReadings > 0 ? (
+                  <li>{skippedReadings} reading{skippedReadings === 1 ? "" : "s"} skipped (do not count toward completion)</li>
+                ) : null}
+                {missingFinals > 0 ? (
+                  <li>{missingFinals} assignment{missingFinals === 1 ? "" : "s"} missing final submission</li>
+                ) : null}
+                {courseStanding.completion.thesisIncomplete ? (
+                  <li>
+                    {courseStanding.thesis?.hasProject
+                      ? "Thesis milestones remain incomplete."
+                      : "No thesis project recorded for RSYN 720."}
+                  </li>
+                ) : null}
+              </ul>
+            </>
           )}
         </div>
-      </DocumentSection>
+      </section>
 
-      <DocumentSection title="Current Work">
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm text-[var(--muted)] space-y-2">
+      {/* ─── Current work ─── */}
+      <section className="space-y-3">
+        <h2 className="text-lg">Current Work</h2>
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm space-y-2">
           {nextModule ? (
             <>
-              <p className="text-sm font-semibold text-[var(--text)]">
-                Continue module {nextModule.position + 1}: {nextModule.title}
+              <p className="font-semibold text-[var(--text)]">
+                Continue Unit {nextModule.position + 1}: {nextModule.title}
               </p>
               {nextModule.nextAction ? (
                 <>
-                  <p>{nextModule.nextAction.title}</p>
-                  <p>{nextModule.nextAction.reason}</p>
+                  <p className="text-[var(--muted)]">{nextModule.nextAction.title}</p>
+                  <p className="text-xs text-[var(--muted)]">{nextModule.nextAction.reason}</p>
                 </>
               ) : (
-                <p>All required work in this module is complete.</p>
+                <p className="text-[var(--muted)]">All required work in this unit is complete.</p>
               )}
             </>
           ) : (
-            <p>No incomplete modules remain in this course.</p>
+            <p className="text-[var(--muted)]">No incomplete units remain in this course.</p>
           )}
         </div>
-      </DocumentSection>
+      </section>
 
-      <DocumentSection title="Module Sequence">
-        {moduleSummaries.length ? (
-          <div className="space-y-8">
-            {moduleSummaries.map((module) => (
-              <div key={module.id} className="space-y-4">
-                <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-2">
-                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                    Module {module.position + 1}
-                  </p>
-                  <h3 className="text-lg font-semibold">{module.title}</h3>
-                  <p className="text-sm text-[var(--muted)]">
-                    {module.overview ?? "No overview recorded."}
-                  </p>
-                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                    Progress {module.standing.completion.completedTasks}/
-                    {module.standing.completion.totalTasks}
-                  </p>
-                </div>
-
-                <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
-                  <h4 className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-                    Readings
-                  </h4>
-                  {module.readings.length ? (
-                    <div className="space-y-3 text-sm text-[var(--muted)]">
-                      {module.readings.map((reading) => (
-                        <div
-                          key={reading.id}
-                          className="flex flex-col gap-1 border-b border-[var(--border)] pb-3 last:border-b-0 last:pb-0"
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span>
-                              {reading.title}
-                              {reading.author ? ` — ${reading.author}` : ""}
-                            </span>
-                            <span className="text-xs uppercase tracking-[0.2em]">
-                              {reading.status.replace(/_/g, " ")}
-                            </span>
-                          </div>
-                          <div className="text-xs text-[var(--muted)]">
-                            {[reading.source_type, reading.primary_or_secondary, reading.tradition_or_era]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </div>
-                          {reading.pages_or_length ? (
-                            <div className="text-xs text-[var(--muted)]">
-                              {reading.pages_or_length}
-                              {reading.estimated_hours
-                                ? ` · ${reading.estimated_hours} hr`
-                                : ""}
-                            </div>
-                          ) : null}
-                          {reading.reference_url_or_citation ? (
-                            <div className="text-xs text-[var(--muted)]">
-                              {reading.reference_url_or_citation}
-                            </div>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-[var(--muted)]">
-                      No readings recorded.
-                    </p>
-                  )}
-                </div>
-
-                <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
-                  <h4 className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-                    Assignments
-                  </h4>
-                  {module.assignments.length ? (
-                    <div className="space-y-3 text-sm text-[var(--muted)]">
-                      {module.assignments.map((assignment) => {
-                        const status = assignmentStatus.get(assignment.id);
-                        const label = status?.hasFinal
-                          ? status.hasCritique
-                            ? "Final · Critiqued"
-                            : "Final · Critique pending"
-                          : status?.hasDraft
-                          ? "Draft only"
-                          : "No submission";
-                        return (
-                          <div
-                            key={assignment.id}
-                            className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] pb-3 last:border-b-0 last:pb-0"
-                          >
-                            <span>
-                              {assignment.title} ·{" "}
-                              {assignment.assignment_type.replace(/_/g, " ")}
-                            </span>
-                            <span className="text-xs uppercase tracking-[0.2em]">
-                              {assignment.due_at
-                                ? formatDate(assignment.due_at)
-                                : "No deadline"}
-                            </span>
-                            <span className="text-xs uppercase tracking-[0.2em]">
-                              {label}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-[var(--muted)]">
-                      No assignments recorded.
-                    </p>
-                  )}
-                </div>
-              </div>
-            ))}
+      {/* ─── Unit-by-unit record ─── */}
+      {moduleSummaries.map((module) => (
+        <section key={module.id} className="space-y-3">
+          <div className="border-b border-[var(--border)] pb-2">
+            <div className="flex flex-wrap items-center gap-x-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+              <span>Unit {module.position + 1}</span>
+              <span>{module.standing.completion.completedTasks}/{module.standing.completion.totalTasks} tasks</span>
+            </div>
+            <h2 className="text-base font-semibold">{module.title}</h2>
           </div>
-        ) : (
+
+          {module.overview ? (
+            <p className="font-serif text-sm leading-relaxed text-[var(--muted)]">{module.overview}</p>
+          ) : null}
+
+          {module.readings.length > 0 ? (
+            <div className="space-y-1">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Readings</p>
+              <ul className="space-y-0.5 text-sm text-[var(--muted)]">
+                {module.readings.map((reading) => (
+                  <li key={reading.id} className={reading.status === "complete" ? "line-through opacity-50" : ""}>
+                    {reading.author ? `${reading.author}, ` : ""}{reading.title}
+                    {reading.pages_or_length ? ` (${reading.pages_or_length})` : ""}
+                    <span className="text-xs uppercase tracking-[0.2em]">
+                      {" "}· {reading.status === "complete" ? "Complete" : reading.status?.replace(/_/g, " ") ?? ""}
+                    </span>
+                    {reading.source_type ? (
+                      <span className="text-xs text-[var(--muted)]"> · {reading.source_type}</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {module.assignments.length > 0 ? (
+            <div className="space-y-1">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Written work</p>
+              <ul className="space-y-1 text-sm">
+                {module.assignments.map((assignment) => {
+                  const status = assignmentStatus.get(assignment.id);
+                  const isFinal = status?.hasFinal;
+                  const label = isFinal
+                    ? status.hasCritique
+                      ? "Final · Critiqued"
+                      : "Final"
+                    : status?.hasDraft
+                    ? "Draft only"
+                    : "Not submitted";
+                  return (
+                    <li key={assignment.id} className={isFinal ? "text-[var(--muted)]" : "font-semibold"}>
+                      {assignment.title}
+                      <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                        {" "}· {assignment.assignment_type.replace(/_/g, " ")} · {label}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
+        </section>
+      ))}
+
+      {!moduleSummaries.length ? (
+        <section className="space-y-3">
           <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)]">
-            No modules recorded for this course.
+            No units recorded for this course.
           </div>
-        )}
-      </DocumentSection>
-
-      {course.learning_outcomes || course.syllabus ? (
-        <DocumentSection title="Course Documentation">
-          {course.learning_outcomes ? (
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-2 text-sm text-[var(--muted)]">
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                Learning Outcomes
-              </p>
-              <p className="whitespace-pre-wrap">{course.learning_outcomes}</p>
-            </div>
-          ) : null}
-          {course.syllabus ? (
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-2 text-sm text-[var(--muted)]">
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                Syllabus
-              </p>
-              <p className="whitespace-pre-wrap">{course.syllabus}</p>
-            </div>
-          ) : null}
-        </DocumentSection>
+        </section>
       ) : null}
-    </FormalDocumentLayout>
+
+      {/* ─── Course documentation ─── */}
+      {(course.learning_outcomes || course.syllabus) ? (
+        <section className="space-y-3">
+          <h2 className="text-lg">Course Information</h2>
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-4">
+            {course.syllabus ? (
+              <div className="space-y-1">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Syllabus</p>
+                <p className="text-sm text-[var(--muted)] whitespace-pre-wrap">{course.syllabus}</p>
+              </div>
+            ) : null}
+            {course.learning_outcomes ? (
+              <div className="space-y-1">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Learning outcomes</p>
+                <p className="text-sm text-[var(--muted)] whitespace-pre-wrap">{course.learning_outcomes}</p>
+              </div>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      {/* ─── Document footer ─── */}
+      <footer className="border-t border-[var(--border)] pt-4 text-xs text-[var(--muted)]">
+        <p>
+          {program.title} · {course.code ?? "Course"} · Course dossier · {completedTasks}/{totalTasks} tasks · Generated {now}
+        </p>
+      </footer>
+    </div>
   );
 }

@@ -337,54 +337,43 @@ export default async function CoursePage({
           {course.description ? <p className="font-serif text-sm leading-relaxed text-[var(--muted)]">{course.description}</p> : null}
         </header>
 
-        {/* ─── Progress ─── */}
-        <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Progress</p>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              {isCourseComplete ? "Complete" : `${completedTasks} of ${totalTasks} fulfilled · ${finalAssignments} of ${totalAssignments} final submissions`}
-            </p>
-          </div>
-          {nextModule ? (
-            <Link href={`/modules/${nextModule.id}`} className="block rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4 space-y-1 transition hover:border-[var(--accent-soft)]">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <p className="text-sm font-semibold">Unit {nextModule.position + 1}: {nextModule.title}</p>
+        {/* ─── Current course work ─── */}
+        {nextModule ? (
+          <section className="space-y-2">
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Current course work</p>
+            <Link href={`/modules/${nextModule.id}`} className="block group">
+              <p className="text-sm font-semibold group-hover:text-[var(--accent-soft)]">
+                Unit {nextModule.position + 1}: {nextModule.title}
+              </p>
+              <div className="flex flex-wrap items-center gap-x-4 text-xs text-[var(--muted)]">
                 {(() => {
                   const unitSched = schedule?.unitSchedules.get(nextModule.id);
-                  return unitSched ? (
-                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Due {formatScheduleDate(unitSched.endsAt)}</p>
-                  ) : null;
+                  return unitSched ? <span>Due {formatScheduleDate(unitSched.endsAt)}</span> : null;
                 })()}
+                <span>{completedTasks} of {totalTasks} requirements fulfilled</span>
+                <span>{finalAssignments} of {totalAssignments} final submissions</span>
               </div>
-              <p className="text-xs text-[var(--muted)]">Continue current unit</p>
             </Link>
-          ) : isCourseComplete ? (
-            <p className="text-sm font-semibold text-[var(--text)]">All requirements fulfilled.</p>
-          ) : null}
-        </section>
+          </section>
+        ) : isCourseComplete ? (
+          <section className="space-y-1">
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Standing</p>
+            <p className="text-sm font-semibold">All requirements fulfilled. This course is officially complete.</p>
+          </section>
+        ) : null}
 
         {/* ─── Course requirements ─── */}
         <section className="space-y-3">
           <h2 className="text-lg">Course Requirements</h2>
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-4 text-sm text-[var(--muted)]">
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-1">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Readings</p>
-                <p>{(readings ?? []).length} assigned readings</p>
-                {totalHours ? <p>{totalHours.toFixed(1)} estimated hours</p> : null}
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Written work</p>
-                <p>{(assignments ?? []).length} assignments</p>
-                <p>Each requires a final submission</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Completion standard</p>
-                <p>All readings complete</p>
-                <p>All written work finalized</p>
-                <p>Critique recommended, not required</p>
-              </div>
+          <div className="text-sm text-[var(--muted)] space-y-2">
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+              <span>{(readings ?? []).length} readings{totalHours ? ` · ${totalHours.toFixed(1)}h` : ""}</span>
+              <span>{(assignments ?? []).length} written assignments</span>
+              <span>{completedTasks}/{totalTasks} fulfilled</span>
             </div>
+            <p>
+              Completion requires all assigned readings marked complete and a final submission for each written assignment. Critique is recommended but not required for standing.
+            </p>
           </div>
         </section>
 
@@ -454,7 +443,7 @@ export default async function CoursePage({
         })()}
 
         <section className="space-y-4">
-          <h2 className="text-lg">Syllabus</h2>
+          <h2 className="text-lg">Unit Sequence</h2>
 
           {moduleSummaries.length ? (
             <div className="space-y-6">
@@ -465,33 +454,29 @@ export default async function CoursePage({
                 const unitSched = schedule?.unitSchedules.get(module.id);
 
                 return (
-                  <div key={module.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
-                    <Link
-                      href={`/modules/${module.id}`}
-                      className="block p-5 transition hover:bg-[var(--surface-muted)]"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-4">
-                        <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                          Unit {module.position + 1}{module.position + 1 === moduleSummaries.length ? " · Final unit" : ""}
-                          {unitSched ? ` · ${formatScheduleDate(unitSched.startsAt)} – ${formatScheduleDate(unitSched.endsAt)}` : ""}
-                        </p>
-                        <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                          {isComplete ? "Complete" : `${module.completedTasks} of ${module.totalTasks} fulfilled`}
-                        </p>
+                  <div key={module.id} className="space-y-2">
+                    <Link href={`/modules/${module.id}`} className="block group">
+                      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--border)] pb-2">
+                        <div className="space-y-0.5">
+                          <div className="flex flex-wrap items-center gap-x-3 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                            <span>Unit {module.position + 1}</span>
+                            {unitSched ? <span>{formatScheduleDate(unitSched.startsAt)} – {formatScheduleDate(unitSched.endsAt)}</span> : null}
+                            <span>{isComplete ? "Complete" : `${module.completedTasks}/${module.totalTasks}`}</span>
+                          </div>
+                          <h3 className="text-base font-semibold group-hover:text-[var(--accent-soft)]">{module.title}</h3>
+                        </div>
                       </div>
-                      <h3 className="mt-2 text-lg font-semibold">{module.title}</h3>
                       {module.overview ? (
-                        <p className="mt-1 text-sm text-[var(--muted)]">{module.overview}</p>
+                        <p className="mt-1 font-serif text-sm leading-relaxed text-[var(--muted)]">{module.overview}</p>
                       ) : null}
                     </Link>
 
-                    {/* Inline syllabus: readings + written work for this unit */}
                     {(unitReadings.length > 0 || unitAssignments.length > 0) ? (
-                      <div className="border-t border-[var(--border)] px-5 py-4 space-y-3">
+                      <div className="grid gap-x-8 gap-y-2 md:grid-cols-2 pl-4 border-l-2 border-[var(--border)]">
                         {unitReadings.length > 0 ? (
-                          <div className="space-y-1">
+                          <div className="space-y-0.5">
                             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Readings</p>
-                            <ol className="space-y-0.5 text-sm text-[var(--muted)]">
+                            <ul className="space-y-0.5 text-sm text-[var(--muted)]">
                               {(unitReadings as { id?: string; title?: string | null; author?: string | null; position?: number }[])
                                 .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
                                 .map((r, i) => (
@@ -499,19 +484,19 @@ export default async function CoursePage({
                                     {r.author ? `${r.author}, ` : ""}{r.title}
                                   </li>
                                 ))}
-                            </ol>
+                            </ul>
                           </div>
                         ) : null}
                         {unitAssignments.length > 0 ? (
-                          <div className="space-y-1">
+                          <div className="space-y-0.5">
                             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Written work</p>
-                            <ol className="space-y-0.5 text-sm text-[var(--muted)]">
+                            <ul className="space-y-0.5 text-sm text-[var(--muted)]">
                               {(unitAssignments as { id?: string; title?: string | null; assignment_type?: string }[]).map((a, i) => (
                                 <li key={a.id ?? i}>
                                   {a.title}{a.assignment_type ? ` (${a.assignment_type.replace(/_/g, " ")})` : ""}
                                 </li>
                               ))}
-                            </ol>
+                            </ul>
                           </div>
                         ) : null}
                       </div>
@@ -547,108 +532,81 @@ export default async function CoursePage({
           </section>
         ) : null}
 
-        <section className="space-y-3">
-          <h2 className="text-lg">Standing</h2>
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3 text-sm text-[var(--muted)]">
-            {unreadReadings === 0 &&
-            skippedReadings === 0 &&
-            missingFinals === 0 &&
-            !courseStanding.completion.thesisIncomplete ? (
-              <p className="font-semibold text-[var(--text)]">
-                All requirements fulfilled. This course is officially complete.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                <div className="flex flex-wrap gap-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                  <span>{completedTasks} of {totalTasks || 0} requirements fulfilled</span>
-                  <span>{finalAssignments} of {totalAssignments} final submissions</span>
-                </div>
-                <ul className="list-disc pl-5 text-[var(--muted)]">
-                  {unreadReadings > 0 ? (
-                    <li>{unreadReadings} reading{unreadReadings === 1 ? "" : "s"} not complete</li>
-                  ) : null}
-                  {skippedReadings > 0 ? (
-                    <li>{skippedReadings} reading{skippedReadings === 1 ? "" : "s"} skipped (do not count)</li>
-                  ) : null}
-                  {missingFinals > 0 ? (
-                    <li>{missingFinals} assignment{missingFinals === 1 ? "" : "s"} missing final submission</li>
-                  ) : null}
-                  {draftAssignments > 0 ? (
-                    <li>{draftAssignments} assignment{draftAssignments === 1 ? "" : "s"} with draft only</li>
-                  ) : null}
-                  {courseStanding.completion.thesisIncomplete ? (
-                    <li>
-                      {courseStanding.thesis?.hasProject
-                        ? "Thesis milestones remain incomplete."
-                        : "No thesis project recorded for RSYN 720."}
-                    </li>
-                  ) : null}
-                </ul>
+        {!isCourseComplete ? (
+          <section className="space-y-3">
+            <h2 className="text-lg">Standing</h2>
+            <div className="text-sm text-[var(--muted)] space-y-2">
+              <div className="flex flex-wrap gap-x-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                <span>{completedTasks} of {totalTasks || 0} requirements fulfilled</span>
+                <span>{finalAssignments} of {totalAssignments} final submissions</span>
               </div>
-            )}
-          </div>
-        </section>
+              <ul className="list-disc pl-5 text-[var(--muted)]">
+                {unreadReadings > 0 ? (
+                  <li>{unreadReadings} reading{unreadReadings === 1 ? "" : "s"} not complete</li>
+                ) : null}
+                {skippedReadings > 0 ? (
+                  <li>{skippedReadings} reading{skippedReadings === 1 ? "" : "s"} skipped (do not count)</li>
+                ) : null}
+                {missingFinals > 0 ? (
+                  <li>{missingFinals} assignment{missingFinals === 1 ? "" : "s"} missing final submission</li>
+                ) : null}
+                {draftAssignments > 0 ? (
+                  <li>{draftAssignments} assignment{draftAssignments === 1 ? "" : "s"} with draft only</li>
+                ) : null}
+                {courseStanding.completion.thesisIncomplete ? (
+                  <li>
+                    {courseStanding.thesis?.hasProject
+                      ? "Thesis milestones remain incomplete."
+                      : "No thesis project recorded for RSYN 720."}
+                  </li>
+                ) : null}
+              </ul>
+            </div>
+          </section>
+        ) : null}
 
         <section className="space-y-3">
           <h2 className="text-lg">Course Details</h2>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
-              <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">Prerequisites</h3>
-              {prerequisiteCourses.length ? (
-                <ul className="space-y-2 text-sm text-[var(--muted)]">
-                  {prerequisiteCourses.map((prereq) => (
-                    <li key={prereq.id}>
-                      {prereq.code ? `${prereq.code} — ` : ""}
-                      {prereq.title}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-[var(--muted)]">None. This course may be taken first.</p>
-              )}
-              {unmetPrereqs.length ? (
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Prerequisites pending: {unmetPrereqs.map((c) => c.code ?? c.title).join(", ")}
-                </p>
-              ) : null}
+          <div className="divide-y divide-[var(--border)] text-sm">
+            <div className="flex flex-wrap items-start justify-between gap-4 py-3">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] w-32 shrink-0">Catalog</p>
+              <p className="text-[var(--muted)] flex-1">
+                {[course.code, course.level, course.credits_or_weight ? `${course.credits_or_weight} credits` : null, course.domain?.title ?? course.department_or_domain].filter(Boolean).join(" · ")}
+              </p>
             </div>
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
-              <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">Catalog</h3>
-              <div className="space-y-1 text-sm text-[var(--muted)]">
-                {course.code ? <p>{course.code}</p> : null}
-                {course.level ? <p>{course.level}</p> : null}
-                {course.credits_or_weight ? <p>{course.credits_or_weight} credits</p> : null}
-                {course.domain ? (
-                  <p>{course.domain.title}</p>
-                ) : course.department_or_domain ? (
-                  <p>{course.department_or_domain}</p>
-                ) : null}
+            <div className="flex flex-wrap items-start justify-between gap-4 py-3">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] w-32 shrink-0">Prerequisites</p>
+              <div className="text-[var(--muted)] flex-1">
+                {prerequisiteCourses.length ? (
+                  <>
+                    <p>{prerequisiteCourses.map((p) => p.code ? `${p.code} — ${p.title}` : p.title).join("; ")}</p>
+                    {unmetPrereqs.length ? (
+                      <p className="text-xs text-[var(--muted)] mt-1">Pending: {unmetPrereqs.map((c) => c.code ?? c.title).join(", ")}</p>
+                    ) : null}
+                  </>
+                ) : (
+                  <p>None. This course may be taken first.</p>
+                )}
               </div>
             </div>
-          </div>
-          {requirementBlocks.length ? (
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
-              <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">Satisfies</h3>
-              <ul className="space-y-1 text-sm text-[var(--muted)]">
-                {requirementBlocks.map((block) => (
-                  <li key={block.id}>
-                    {block.title}
-                    {block.category ? ` (${block.category})` : ""}
-                  </li>
-                ))}
-              </ul>
-              {course.program?.id ? (
-                <Link
-                  href={`/programs/${course.program.id}/audit`}
-                  className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
-                >
-                  Program audit
-                </Link>
-              ) : null}
+            {requirementBlocks.length ? (
+              <div className="flex flex-wrap items-start justify-between gap-4 py-3">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] w-32 shrink-0">Satisfies</p>
+                <p className="text-[var(--muted)] flex-1">
+                  {requirementBlocks.map((b) => `${b.title}${b.category ? ` (${b.category})` : ""}`).join("; ")}
+                </p>
+              </div>
+            ) : null}
+            <div className="flex flex-wrap items-start justify-between gap-4 py-3">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] w-32 shrink-0">Readiness</p>
+              <p className="text-[var(--muted)] flex-1">{readinessStatus}</p>
             </div>
-          ) : null}
+          </div>
           <div className="flex flex-wrap gap-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-            <Link href={`/courses/${course.id}/dossier`}>Course dossier</Link>
+            <Link href={`/courses/${course.id}/dossier`} className="hover:text-[var(--text)]">Course dossier</Link>
+            {course.program?.id ? (
+              <Link href={`/programs/${course.program.id}/audit`} className="hover:text-[var(--text)]">Program audit</Link>
+            ) : null}
           </div>
         </section>
       </div>

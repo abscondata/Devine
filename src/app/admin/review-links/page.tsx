@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClient, isAdminClientAvailable } from "@/lib/supabase/admin";
 import { createReviewLink, revokeReviewLink } from "@/lib/actions";
 import { FormalDocumentLayout, DocumentSection } from "@/components/formal-document";
 
@@ -76,6 +76,29 @@ export default async function ReviewLinksAdminPage() {
   if (!programs.length) {
     redirect("/dashboard?error=Access denied.");
   }
+
+  if (!isAdminClientAvailable()) {
+    return (
+      <FormalDocumentLayout
+        documentType="Review Access Administration"
+        title="External Review Links"
+        description="Issue and revoke formal review-only access for institutional packet pages."
+      >
+        <DocumentSection title="Configuration Required">
+          <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)] space-y-2">
+            <p>
+              The external review system requires a Supabase service role key.
+            </p>
+            <p>
+              Set <code className="font-mono text-[var(--text)]">SUPABASE_SERVICE_ROLE_KEY</code> in
+              the environment configuration and restart the application.
+            </p>
+          </div>
+        </DocumentSection>
+      </FormalDocumentLayout>
+    );
+  }
+
   const admin = createAdminClient();
   const { data: reviewLinks } = programIds.length
     ? await admin

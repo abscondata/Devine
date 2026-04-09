@@ -1,5 +1,8 @@
 import crypto from "crypto";
-import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  createAdminClient,
+  AdminClientUnavailableError,
+} from "@/lib/supabase/admin";
 
 export type ReviewAccess = {
   id: string;
@@ -23,7 +26,17 @@ export async function getReviewAccess(
   options?: { logAccess?: boolean }
 ): Promise<ReviewAccess | null> {
   if (!token) return null;
-  const admin = createAdminClient();
+
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch (err) {
+    if (err instanceof AdminClientUnavailableError) {
+      return null;
+    }
+    throw err;
+  }
+
   const tokenHash = hashReviewToken(token);
   const { data, error } = await admin
     .from("review_links")
@@ -53,7 +66,17 @@ export async function getReviewProgram(
 ): Promise<{ access: ReviewAccess; program: ReviewProgram } | null> {
   const access = await getReviewAccess(token, options);
   if (!access) return null;
-  const admin = createAdminClient();
+
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch (err) {
+    if (err instanceof AdminClientUnavailableError) {
+      return null;
+    }
+    throw err;
+  }
+
   const { data: program, error } = await admin
     .from("programs")
     .select("id, title, description, owner_id")

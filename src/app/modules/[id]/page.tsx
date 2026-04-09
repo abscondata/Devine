@@ -126,11 +126,11 @@ export default async function ModulePage({
 
   return (
     <ProtectedShell userEmail={user.email ?? null}>
-      <div className="space-y-8">
+      <div className="space-y-10">
 
-        <header className="space-y-2">
+        <header className="space-y-2 border-b border-[var(--border)] pb-6">
           <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-            <Link href="/dashboard">My Term</Link>
+            <Link href="/dashboard">Home</Link>
             <span>/</span>
             <Link href={`/courses/${module.course?.id}`}>{module.course?.code ?? "Course"}</Link>
           </div>
@@ -138,77 +138,68 @@ export default async function ModulePage({
             <span>Unit {module.position + 1} of {totalUnits}</span>
             {unitSched ? <span>{formatScheduleDate(unitSched.startsAt)} – {formatScheduleDate(unitSched.endsAt)}</span> : null}
             {totalHours ? <span>{totalHours.toFixed(1)}h reading</span> : null}
+            <span>{standing.completion.completedTasks}/{standing.completion.totalTasks} requirements</span>
           </div>
           <h1 className="text-3xl">{module.title}</h1>
-          {module.overview ? <p className="text-sm text-[var(--muted)]">{module.overview}</p> : null}
+          {module.overview ? (
+            <p className="font-serif text-sm leading-relaxed text-[var(--muted)]">{module.overview}</p>
+          ) : null}
         </header>
 
-        {/* ─── Status + Next action ─── */}
-        <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
-          <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-            <span>{standing.completion.completedTasks} of {standing.completion.totalTasks} requirements fulfilled</span>
-            <span>{completedReadings} of {totalReadings} readings complete</span>
-            <span>{standing.assignmentSummary.finalAssignments} of {standing.assignmentSummary.totalAssignments} final submissions</span>
-          </div>
-          {standing.completion.isComplete ? (
-            <p className="text-sm font-semibold text-[var(--text)]">This unit is complete.</p>
-          ) : nextAction ? (
-            <div className="border-t border-[var(--border)] pt-3 space-y-1">
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Next</p>
-              <p className="text-sm font-semibold text-[var(--text)]">{nextAction.title}</p>
-              <p className="text-sm text-[var(--muted)]">{nextAction.reason}</p>
-            </div>
-          ) : null}
-        </section>
+        {/* ─── Next required action ─── */}
+        {standing.completion.isComplete ? (
+          <p className="text-sm font-semibold text-[var(--text)]">This unit is complete.</p>
+        ) : nextAction ? (
+          <section className="space-y-1">
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Next required action</p>
+            <p className="text-sm font-semibold">{nextAction.title}</p>
+            <p className="text-sm text-[var(--muted)]">{nextAction.reason}</p>
+          </section>
+        ) : null}
 
         {/* ─── Reading sequence ─── */}
         {totalReadings > 0 ? (
           <section className="space-y-3">
             <h2 className="text-lg">Readings</h2>
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
+            <ol className="divide-y divide-[var(--border)]">
               {(readings ?? []).map((reading, index) => {
                 const done = isReadingComplete(reading.status);
                 const skipped = isReadingSkipped(reading.status);
                 return (
-                  <div key={reading.id} className={`p-5 space-y-2 ${done ? "opacity-60" : ""}`}>
+                  <li key={reading.id} className={`py-4 first:pt-0 ${done ? "opacity-50" : ""}`}>
                     <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                      <div className="space-y-0.5">
-                        <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">{index + 1}</p>
-                        <h3 className={`text-base ${done ? "line-through" : "font-semibold"}`}>{reading.title}</h3>
-                        <p className="text-sm text-[var(--muted)]">
-                          {[reading.author, reading.tradition_or_era, reading.pages_or_length].filter(Boolean).join(" · ")}
+                      <div className="space-y-0.5 flex-1">
+                        <h3 className={`text-sm ${done ? "line-through text-[var(--muted)]" : "font-semibold"}`}>
+                          <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] mr-2">{index + 1}.</span>
+                          {reading.title}
+                        </h3>
+                        <p className="text-xs text-[var(--muted)]">
+                          {[reading.author, reading.source_type, reading.tradition_or_era, reading.pages_or_length, reading.estimated_hours ? `${reading.estimated_hours}h` : null].filter(Boolean).join(" · ")}
                         </p>
-                        {reading.source_type ? (
-                          <p className="text-xs text-[var(--muted)]">
-                            {reading.source_type}{reading.primary_or_secondary ? ` · ${reading.primary_or_secondary}` : ""}
-                            {reading.estimated_hours ? ` · ${reading.estimated_hours}h` : ""}
-                          </p>
-                        ) : null}
+                        {skipped ? <p className="text-xs text-[var(--muted)]">Skipped (does not count toward completion).</p> : null}
+                        {reading.reference_url_or_citation ? <p className="text-xs text-[var(--muted)]">{reading.reference_url_or_citation}</p> : null}
                       </div>
-                      {/* Compact status control */}
-                      <form action={updateReadingStatus} className="flex items-center gap-2 shrink-0">
+                      <form action={updateReadingStatus} className="flex items-center gap-1.5 shrink-0">
                         <input type="hidden" name="readingId" value={reading.id} />
                         <input type="hidden" name="moduleId" value={module.id} />
                         <select
                           name="status"
                           defaultValue={reading.status}
-                          className="rounded border border-[var(--border)] bg-[var(--surface-muted)] px-2 py-1 text-xs"
+                          className="border-0 bg-transparent text-xs text-[var(--muted)] cursor-pointer py-1 pr-5 focus:outline-none"
                         >
                           {readingStatuses.map((s) => (
                             <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
                           ))}
                         </select>
-                        <button type="submit" className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)]">
-                          Save
+                        <button type="submit" className="text-xs text-[var(--muted)] hover:text-[var(--text)] transition-colors">
+                          save
                         </button>
                       </form>
                     </div>
-                    {skipped ? <p className="text-xs text-[var(--muted)]">Skipped (does not count toward completion).</p> : null}
-                    {reading.reference_url_or_citation ? <p className="text-xs text-[var(--muted)]">{reading.reference_url_or_citation}</p> : null}
-                  </div>
+                  </li>
                 );
               })}
-            </div>
+            </ol>
           </section>
         ) : null}
 
@@ -216,7 +207,7 @@ export default async function ModulePage({
         {(assignments ?? []).length > 0 ? (
           <section className="space-y-3">
             <h2 className="text-lg">Written Work</h2>
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
+            <div className="divide-y divide-[var(--border)]">
               {(assignments ?? []).map((a) => {
                 const status = assignmentStatus.get(a.id);
                 const isFinal = status?.hasFinal;
@@ -231,22 +222,20 @@ export default async function ModulePage({
                   <Link
                     key={a.id}
                     href={`/assignments/${a.id}`}
-                    className={`block p-5 transition hover:bg-[var(--surface-muted)] ${isFinal ? "opacity-60" : ""}`}
+                    className={`flex flex-wrap items-center justify-between gap-4 py-4 first:pt-0 group ${isFinal ? "opacity-50" : ""}`}
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                      <div className="space-y-0.5">
-                        <h3 className={`text-base ${isFinal ? "line-through" : "font-semibold"}`}>{a.title}</h3>
-                        <p className="text-xs text-[var(--muted)]">
-                          {a.assignment_type.replace(/_/g, " ")}
-                          {status?.hasFinal ? " · Final submitted" : status?.hasDraft ? " · Draft" : " · Not submitted"}
-                        </p>
-                      </div>
-                      {dueDate ? (
-                        <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] shrink-0">
-                          {isFinal ? "Submitted" : `Due ${formatScheduleDate(dueDate)}${isRevised ? " · Revised" : ""}`}
-                        </p>
-                      ) : null}
+                    <div className="space-y-0.5">
+                      <h3 className={`text-sm ${isFinal ? "line-through text-[var(--muted)]" : "font-semibold group-hover:text-[var(--accent-soft)]"}`}>{a.title}</h3>
+                      <p className="text-xs text-[var(--muted)]">
+                        {a.assignment_type.replace(/_/g, " ")}
+                        {status?.hasFinal ? " · Final submitted" : status?.hasDraft ? " · Draft" : " · Not submitted"}
+                      </p>
                     </div>
+                    {dueDate ? (
+                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] shrink-0">
+                        {isFinal ? "Submitted" : `Due ${formatScheduleDate(dueDate)}${isRevised ? " · Revised" : ""}`}
+                      </p>
+                    ) : null}
                   </Link>
                 );
               })}

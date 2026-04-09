@@ -1,13 +1,13 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCritiqueSummary, getFinalSubmissionSummary } from "@/lib/scholarly-evaluation";
 import { getReviewProgram } from "@/lib/review-access";
-import { DocumentSection, FormalDocumentLayout } from "@/components/formal-document";
 
 function formatDate(value?: string | null) {
-  if (!value) return "--";
+  if (!value) return "—";
   return new Date(value).toLocaleDateString("en-US", {
-    month: "short",
+    month: "long",
     day: "numeric",
     year: "numeric",
   });
@@ -82,82 +82,98 @@ export default async function ReviewFinalSubmissionRecordPage({
     critiqueVersion: critique?.submission_version ?? null,
   });
 
-  const recordDate = formatDate(new Date().toISOString());
+  const now = formatDate(new Date().toISOString());
 
   return (
-    <FormalDocumentLayout
-      backLink={{ href: `/review/${token}/work`, label: "Academic work record" }}
-      documentType="Final Submission Record"
-      title={assignment.title}
-      description="Formal record of a finalized academic submission."
-      recordDate={recordDate}
-      actions={[
-        { href: `/review/${token}/courses/${course.id}`, label: "Course dossier" },
-        { href: `/review/${token}/record`, label: "Academic record" },
-      ]}
-    >
-      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3 text-sm text-[var(--muted)]">
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              Course
-            </p>
-            <p>
-              {course.code ? `${course.code} - ` : ""}
-              {course.title}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              Module
-            </p>
-            <p>
-              {module.title} (Module {module.position + 1})
-            </p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              Assignment Type
-            </p>
-            <p>{assignment.assignment_type}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              Final Status
-            </p>
-            <p className="text-[var(--text)]">
-              {finalSummary.label} on {formatDate(submission.created_at)}.
-            </p>
+    <div className="space-y-10 max-w-4xl print:max-w-none">
+
+      {/* ─── Document header ─── */}
+      <header className="space-y-4 border-b border-[var(--border)] pb-6">
+        <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)] print:hidden">
+          <Link href={`/review/${token}`}>Program review packet</Link>
+          <span>/</span>
+          <Link href={`/review/${token}/work`}>Academic work record</Link>
+        </div>
+        <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
+          {program.title} · Final Submission Record
+        </p>
+        <h1 className="text-3xl">{assignment.title}</h1>
+        <div className="flex flex-wrap gap-x-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+          <span>{course.code ? `${course.code} — ` : ""}{course.title}</span>
+          <span>Unit {module.position + 1}: {module.title}</span>
+          <span>{assignment.assignment_type.replace(/_/g, " ")}</span>
+          <span>{finalSummary.label}</span>
+        </div>
+        <p className="text-xs text-[var(--muted)]">Generated {now}</p>
+      </header>
+
+      {/* ─── Submission context ─── */}
+      <section className="space-y-3">
+        <h2 className="text-lg">Submission Context</h2>
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
+          <div className="grid gap-4 md:grid-cols-2 text-sm">
+            <div className="space-y-0.5">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Course</p>
+              <p>
+                <Link href={`/review/${token}/courses/${course.id}`} className="no-print">
+                  {course.code ? `${course.code} — ` : ""}{course.title}
+                </Link>
+                <span className="hidden print:inline">{course.code ? `${course.code} — ` : ""}{course.title}</span>
+              </p>
+            </div>
+            <div className="space-y-0.5">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Unit</p>
+              <p>{module.title} (Unit {module.position + 1})</p>
+            </div>
+            <div className="space-y-0.5">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Assignment type</p>
+              <p>{assignment.assignment_type.replace(/_/g, " ")}</p>
+            </div>
+            <div className="space-y-0.5">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Final status</p>
+              <p className="text-[var(--text)]">{finalSummary.label} · {formatDate(submission.created_at)}</p>
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <DocumentSection title="Critique Status">
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm text-[var(--muted)] space-y-2">
+      {/* ─── Critique status ─── */}
+      <section className="space-y-3">
+        <h2 className="text-lg">Critique Status</h2>
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm space-y-2">
           {critique ? (
             <>
-              <p className="text-sm font-semibold text-[var(--text)]">
+              <p className="font-semibold text-[var(--text)]">
                 {critiqueSummary.detail}
               </p>
-              <p>Critique date {formatDate(critique.created_at)}.</p>
+              <p className="text-[var(--muted)]">Critique recorded {formatDate(critique.created_at)}.</p>
               {critique.overall_verdict ? (
-                <p>Overall verdict: {critique.overall_verdict}.</p>
+                <p className="text-[var(--muted)]">Overall verdict: {critique.overall_verdict}.</p>
               ) : null}
             </>
           ) : (
-            <p>{critiqueSummary.detail}</p>
+            <p className="text-[var(--muted)]">{critiqueSummary.detail}</p>
           )}
           <p className="text-xs text-[var(--muted)]">
             Critique is recommended for rigor but does not determine official completion.
           </p>
         </div>
-      </DocumentSection>
+      </section>
 
-      <DocumentSection title="Final Submission">
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm text-[var(--text)] whitespace-pre-wrap">
+      {/* ─── Final submission ─── */}
+      <section className="space-y-3">
+        <h2 className="text-lg">Final Submission</h2>
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm text-[var(--text)] whitespace-pre-wrap leading-relaxed">
           {submission.content}
         </div>
-      </DocumentSection>
-    </FormalDocumentLayout>
+      </section>
+
+      {/* ─── Document footer ─── */}
+      <footer className="border-t border-[var(--border)] pt-4 text-xs text-[var(--muted)]">
+        <p>
+          {program.title} · {course.code ?? "Course"} · {assignment.title} · {finalSummary.label} · Generated {now}
+        </p>
+      </footer>
+    </div>
   );
 }

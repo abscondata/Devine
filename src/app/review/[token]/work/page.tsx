@@ -4,12 +4,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { buildAssignmentStatusMap } from "@/lib/academic-standing";
 import { getCritiqueSummary, getFinalSubmissionSummary } from "@/lib/scholarly-evaluation";
 import { getReviewProgram } from "@/lib/review-access";
-import { DocumentSection, FormalDocumentLayout } from "@/components/formal-document";
 
 function formatDate(value?: string | null) {
-  if (!value) return "--";
+  if (!value) return "—";
   return new Date(value).toLocaleDateString("en-US", {
-    month: "short",
+    month: "long",
     day: "numeric",
     year: "numeric",
   });
@@ -155,21 +154,40 @@ export default async function ReviewWorkPage({
     return a.assignmentTitle.localeCompare(b.assignmentTitle);
   });
 
-  const recordDate = formatDate(new Date().toISOString());
+  const critiquedCount = workRows.filter((r) => r.critiqueLabel !== "No critique").length;
+  const now = formatDate(new Date().toISOString());
 
   return (
-    <FormalDocumentLayout
-      backLink={{ href: `/review/${token}`, label: "Program review packet" }}
-      documentType="Academic Work Record"
-      title={program.title}
-      description="Formal register of finalized academic work and critique status."
-      recordDate={recordDate}
-      actions={[
-        { href: `/review/${token}/record`, label: "Academic record" },
-        { href: `/review/${token}/chronology`, label: "Academic chronology" },
-      ]}
-    >
-      <DocumentSection title="Scope">
+    <div className="space-y-10 max-w-4xl print:max-w-none">
+
+      {/* ─── Document header ─── */}
+      <header className="space-y-4 border-b border-[var(--border)] pb-6">
+        <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)] print:hidden">
+          <Link href={`/review/${token}`}>Program review packet</Link>
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs uppercase tracking-[0.2em] text-[var(--muted)] print:hidden">
+          <Link href={`/review/${token}/charter`}>Charter</Link>
+          <Link href={`/review/${token}/record`}>Record</Link>
+          <Link href={`/review/${token}/chronology`}>Chronology</Link>
+          <span className="text-[var(--text)]">Work</span>
+          <Link href={`/review/${token}/research`}>Research</Link>
+          <Link href={`/review/${token}/thesis`}>Thesis</Link>
+          <Link href={`/review/${token}/readiness`}>Readiness</Link>
+        </div>
+        <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
+          {program.title} · Academic Work Record
+        </p>
+        <h1 className="text-3xl">Academic Work Record</h1>
+        <div className="flex flex-wrap gap-x-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+          <span>{workRows.length} finalized submissions</span>
+          <span>{critiquedCount} critiqued</span>
+        </div>
+        <p className="text-xs text-[var(--muted)]">Generated {now}</p>
+      </header>
+
+      {/* ─── Scope ─── */}
+      <section className="space-y-3">
+        <h2 className="text-lg">Scope</h2>
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm text-[var(--muted)] space-y-2">
           <p>
             This record lists finalized submissions only. Drafts and in-progress work
@@ -177,12 +195,14 @@ export default async function ReviewWorkPage({
             finalized version, but critique is not required for official completion.
           </p>
         </div>
-      </DocumentSection>
+      </section>
 
-      <DocumentSection title="Final Work Archive">
+      {/* ─── Final work archive ─── */}
+      <section className="space-y-3">
+        <h2 className="text-lg">Final Work Archive</h2>
         {workRows.length ? (
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
-            <div className="grid gap-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)] md:grid-cols-[140px_1fr_1fr_140px_180px]">
+            <div className="hidden md:grid gap-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)] md:grid-cols-[140px_1fr_1fr_140px_180px] pb-2 border-b border-[var(--border)]">
               <span>Course</span>
               <span>Module</span>
               <span>Assignment</span>
@@ -195,12 +215,12 @@ export default async function ReviewWorkPage({
                   key={row.finalSubmissionId}
                   className="grid gap-2 md:grid-cols-[140px_1fr_1fr_140px_180px]"
                 >
-                  <span>{row.courseCode ?? "--"}</span>
+                  <span>{row.courseCode ?? "—"}</span>
                   <span>
-                    {row.moduleTitle} (Module {row.modulePosition + 1})
+                    {row.moduleTitle} (Unit {row.modulePosition + 1})
                   </span>
                   <span>
-                    {row.assignmentTitle} - {row.assignmentType} - {row.finalLabel}
+                    {row.assignmentTitle} · {row.assignmentType.replace(/_/g, " ")} · {row.finalLabel}
                   </span>
                   <span>{formatDate(row.finalDate)}</span>
                   <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
@@ -229,7 +249,14 @@ export default async function ReviewWorkPage({
             No finalized academic work has been recorded yet.
           </div>
         )}
-      </DocumentSection>
-    </FormalDocumentLayout>
+      </section>
+
+      {/* ─── Document footer ─── */}
+      <footer className="border-t border-[var(--border)] pt-4 text-xs text-[var(--muted)]">
+        <p>
+          {program.title} · Academic work record · {workRows.length} finalized submissions · {critiquedCount} critiqued · Generated {now}
+        </p>
+      </footer>
+    </div>
   );
 }

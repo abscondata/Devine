@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -17,12 +18,11 @@ import {
   buildThesisSummaryByCourseId,
 } from "@/lib/thesis-governance";
 import { getReviewProgram } from "@/lib/review-access";
-import { DocumentSection, FormalDocumentLayout } from "@/components/formal-document";
 
 function formatDate(value?: string | null) {
-  if (!value) return "--";
+  if (!value) return "—";
   return new Date(value).toLocaleDateString("en-US", {
-    month: "short",
+    month: "long",
     day: "numeric",
     year: "numeric",
   });
@@ -297,44 +297,64 @@ export default async function ReviewRecordPage({
     preferredOrderCodes: ["PHIL 501", "THEO 510", "HIST 520", "SCRP 530"],
   });
 
-  const recordDate = formatDate(new Date().toISOString());
+  const totalCredits = (courses ?? []).reduce((s, c) => s + (c.credits_or_weight ?? 0), 0);
+  const now = formatDate(new Date().toISOString());
 
   return (
-    <FormalDocumentLayout
-      backLink={{ href: `/review/${token}`, label: "Program review packet" }}
-      documentType="Official Academic Record"
-      title={program.title}
-      description={program.description ?? "Formal record of constitutional standing and course progress."}
-      recordDate={recordDate}
-      actions={[
-        { href: `/review/${token}/charter`, label: "Program charter" },
-        { href: `/review/${token}/work`, label: "Academic work record" },
-        { href: `/review/${token}/research`, label: "Research register" },
-        { href: `/review/${token}/chronology`, label: "Academic chronology" },
-      ]}
-    >
-      <DocumentSection title="Program Standing">
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3 text-sm text-[var(--muted)]">
-          <div className="flex flex-wrap gap-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-            <span>Total blocks {programSummary.totalBlocks}</span>
-            <span>Satisfied {programSummary.satisfiedBlocks}</span>
-            <span>Remaining {programSummary.remainingBlocks}</span>
+    <div className="space-y-10 max-w-4xl print:max-w-none">
+
+      {/* ─── Document header ─── */}
+      <header className="space-y-4 border-b border-[var(--border)] pb-6">
+        <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)] print:hidden">
+          <Link href={`/review/${token}`}>Program review packet</Link>
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs uppercase tracking-[0.2em] text-[var(--muted)] print:hidden">
+          <Link href={`/review/${token}/charter`}>Charter</Link>
+          <span className="text-[var(--text)]">Record</span>
+          <Link href={`/review/${token}/chronology`}>Chronology</Link>
+          <Link href={`/review/${token}/work`}>Work</Link>
+          <Link href={`/review/${token}/research`}>Research</Link>
+          <Link href={`/review/${token}/thesis`}>Thesis</Link>
+          <Link href={`/review/${token}/readiness`}>Readiness</Link>
+        </div>
+        <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
+          {program.title} · Official Academic Record
+        </p>
+        <h1 className="text-3xl">Academic Record</h1>
+        <div className="flex flex-wrap gap-x-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+          <span>{courseProgress.length} courses · {totalCredits} credits</span>
+          <span>{completedCourseIds.size} complete · {inProgressCourseIds.size} in progress</span>
+          <span>{programSummary.satisfiedBlocks}/{programSummary.totalBlocks} blocks satisfied</span>
+        </div>
+        <p className="text-xs text-[var(--muted)]">Generated {now}</p>
+      </header>
+
+      {/* ─── Program standing ─── */}
+      <section className="space-y-3">
+        <h2 className="text-lg">Program Standing</h2>
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
+          <div className="flex flex-wrap gap-x-8 gap-y-1 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            <span>Total blocks: {programSummary.totalBlocks}</span>
+            <span>Satisfied: {programSummary.satisfiedBlocks}</span>
+            <span>Remaining: {programSummary.remainingBlocks}</span>
           </div>
-          <p>
+          <p className="text-sm text-[var(--muted)]">
             Requirement blocks define constitutional completion. A block is satisfied
             only when its minimum course or credit threshold is met through officially
             completed courses.
           </p>
         </div>
-      </DocumentSection>
+      </section>
 
-      <DocumentSection title="Transcript">
+      {/* ─── Transcript ─── */}
+      <section className="space-y-3">
+        <h2 className="text-lg">Transcript</h2>
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
-          <div className="grid gap-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)] md:grid-cols-[140px_1fr_160px_160px]">
+          <div className="hidden md:grid gap-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)] md:grid-cols-[140px_1fr_160px_160px] pb-2 border-b border-[var(--border)]">
             <span>Course</span>
             <span>Title</span>
             <span>Status</span>
-            <span>Final Date</span>
+            <span>Final date</span>
           </div>
           <div className="mt-3 space-y-3 text-sm text-[var(--muted)]">
             {courseProgress.map((course) => (
@@ -342,14 +362,14 @@ export default async function ReviewRecordPage({
                 key={course.id}
                 className="grid gap-2 md:grid-cols-[140px_1fr_160px_160px]"
               >
-                <span>{course.code ?? "--"}</span>
+                <span>{course.code ?? "—"}</span>
                 <span>{course.title ?? "Untitled course"}</span>
                 <span className="text-[var(--text)]">
                   {getStandingLabel(course.status)}
                 </span>
-                <span>{course.status === "completed" ? formatDate(course.finalDate) : "--"}</span>
+                <span>{course.status === "completed" ? formatDate(course.finalDate) : "—"}</span>
                 <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] md:col-span-4 no-print">
-                  <a href={`/review/${token}/courses/${course.id}`}>Course dossier</a>
+                  <Link href={`/review/${token}/courses/${course.id}`}>Course dossier</Link>
                 </span>
               </div>
             ))}
@@ -361,11 +381,13 @@ export default async function ReviewRecordPage({
             an active thesis project with all required milestones complete.
           </div>
         </div>
-      </DocumentSection>
+      </section>
 
-      <DocumentSection title="Course Standing Summary">
-        <div className="grid gap-4 md:grid-cols-3 text-sm text-[var(--muted)]">
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 space-y-2">
+      {/* ─── Course standing summary ─── */}
+      <section className="space-y-3">
+        <h2 className="text-lg">Course Standing Summary</h2>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 space-y-2 text-sm text-[var(--muted)]">
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
               Officially Complete
             </p>
@@ -382,7 +404,7 @@ export default async function ReviewRecordPage({
               <p>None yet.</p>
             )}
           </div>
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 space-y-2">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 space-y-2 text-sm text-[var(--muted)]">
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
               In Progress
             </p>
@@ -399,7 +421,7 @@ export default async function ReviewRecordPage({
               <p>None in progress.</p>
             )}
           </div>
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 space-y-2">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 space-y-2 text-sm text-[var(--muted)]">
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
               Not Yet Started
             </p>
@@ -417,42 +439,53 @@ export default async function ReviewRecordPage({
             )}
           </div>
         </div>
-      </DocumentSection>
+      </section>
 
-      <DocumentSection title="Current Work">
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-2 text-sm text-[var(--muted)]">
+      {/* ─── Current work ─── */}
+      <section className="space-y-3">
+        <h2 className="text-lg">Current Work</h2>
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm space-y-2">
           {currentWork.currentModule ? (
             <>
-              <p className="text-sm font-semibold text-[var(--text)]">
+              <p className="font-semibold text-[var(--text)]">
                 {currentWork.currentModule.title ?? "Current module"}
               </p>
               {currentWork.nextAction ? (
                 <>
-                  <p>{currentWork.nextAction.title}</p>
-                  <p>{currentWork.nextAction.reason}</p>
+                  <p className="text-[var(--muted)]">{currentWork.nextAction.title}</p>
+                  <p className="text-xs text-[var(--muted)]">{currentWork.nextAction.reason}</p>
                 </>
               ) : (
-                <p>All required work in the current module is complete.</p>
+                <p className="text-[var(--muted)]">All required work in the current module is complete.</p>
               )}
             </>
           ) : (
-            <p>No active module work is in progress.</p>
+            <p className="text-[var(--muted)]">No active module work is in progress.</p>
           )}
         </div>
-      </DocumentSection>
+      </section>
 
-      <DocumentSection title="Recommended Next Course">
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm text-[var(--muted)]">
+      {/* ─── Recommended next course ─── */}
+      <section className="space-y-3">
+        <h2 className="text-lg">Recommended Next Course</h2>
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm">
           {recommendedNext ? (
-            <p className="text-sm font-semibold text-[var(--text)]">
+            <p className="font-semibold text-[var(--text)]">
               {recommendedNext.code ? `${recommendedNext.code} — ` : ""}
               {recommendedNext.title}
             </p>
           ) : (
-            <p>No ready course is available without prerequisite completion.</p>
+            <p className="text-[var(--muted)]">No ready course is available without prerequisite completion.</p>
           )}
         </div>
-      </DocumentSection>
-    </FormalDocumentLayout>
+      </section>
+
+      {/* ─── Document footer ─── */}
+      <footer className="border-t border-[var(--border)] pt-4 text-xs text-[var(--muted)]">
+        <p>
+          {program.title} · Academic record · {courseProgress.length} courses · {completedCourseIds.size} complete · {programSummary.satisfiedBlocks}/{programSummary.totalBlocks} blocks satisfied · Generated {now}
+        </p>
+      </footer>
+    </div>
   );
 }

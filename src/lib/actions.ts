@@ -15,7 +15,7 @@ import {
   validateStructurePosition,
 } from "@/lib/module-structure";
 import { requireAdminAccess } from "@/lib/admin-gate";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClient, isAdminClientAvailable } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import {
   ASSIGNMENT_TYPE_ERROR,
@@ -1619,6 +1619,10 @@ export async function createReviewLink(formData: FormData) {
 
   await requireProgramAdmin(supabase, programId, user.id);
 
+  if (!isAdminClientAvailable()) {
+    redirect("/admin/review-links?error=" + encodeMessage("Service role key is not configured. Review link operations are unavailable."));
+  }
+
   const token = crypto.randomBytes(24).toString("base64url");
   const tokenHash = hashReviewToken(token);
   const expiresAtIso = expiresAt ? new Date(expiresAt).toISOString() : null;
@@ -1661,6 +1665,10 @@ export async function revokeReviewLink(formData: FormData) {
 
   if (!linkId) {
     redirect("/admin/review-links?error=" + encodeMessage("Review link not found."));
+  }
+
+  if (!isAdminClientAvailable()) {
+    redirect("/admin/review-links?error=" + encodeMessage("Service role key is not configured. Review link operations are unavailable."));
   }
 
   const admin = createAdminClient();

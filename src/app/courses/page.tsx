@@ -143,12 +143,9 @@ export default async function CoursesIndexPage() {
 
   return (
     <ProtectedShell userEmail={user.email ?? null}>
-      <div className="space-y-8">
+      <div className="space-y-10">
 
-        <header className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-            <Link href="/dashboard">My Term</Link>
-          </div>
+        <header className="space-y-2 border-b border-[var(--border)] pb-6">
           <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
             {currentProgram?.title ?? "Devine College"}
           </p>
@@ -168,10 +165,10 @@ export default async function CoursesIndexPage() {
             <section key={level} className="space-y-3">
               <div className="space-y-1">
                 <h2 className="text-lg">{level}</h2>
-                {description ? <p className="text-sm text-[var(--muted)]">{description}</p> : null}
+                {description ? <p className="font-serif text-sm leading-relaxed text-[var(--muted)]">{description}</p> : null}
               </div>
 
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
+              <div className="divide-y divide-[var(--border)]">
                 {levelCourses.map((course) => {
                   const inTerm = termCourseIds.has(course.id);
                   let statusLabel: string;
@@ -184,27 +181,25 @@ export default async function CoursesIndexPage() {
                     <Link
                       key={course.id}
                       href={`/courses/${course.id}`}
-                      className="block p-5 transition hover:bg-[var(--surface-muted)]"
+                      className="flex flex-wrap items-start justify-between gap-4 py-3 group"
                     >
-                      <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div className="space-y-0.5">
-                          <h3 className="text-base font-semibold">
-                            {course.code ? `${course.code} — ` : ""}
-                            {course.title}
-                          </h3>
-                          <p className="text-xs text-[var(--muted)]">
-                            {[
-                              course.credits_or_weight ? `${course.credits_or_weight} credits` : null,
-                              course.department_or_domain,
-                            ].filter(Boolean).join(" · ")}
-                          </p>
-                        </div>
-                        {statusLabel ? (
-                          <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] shrink-0">
-                            {statusLabel}
-                          </p>
-                        ) : null}
+                      <div className="space-y-0.5">
+                        <h3 className="text-sm font-semibold group-hover:text-[var(--accent-soft)]">
+                          {course.code ? `${course.code} — ` : ""}
+                          {course.title}
+                        </h3>
+                        <p className="text-xs text-[var(--muted)]">
+                          {[
+                            course.credits_or_weight ? `${course.credits_or_weight} credits` : null,
+                            course.department_or_domain,
+                          ].filter(Boolean).join(" · ")}
+                        </p>
                       </div>
+                      {statusLabel ? (
+                        <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] shrink-0">
+                          {statusLabel}
+                        </p>
+                      ) : null}
                     </Link>
                   );
                 })}
@@ -213,14 +208,14 @@ export default async function CoursesIndexPage() {
           );
         })}
 
-        <section className="flex flex-wrap gap-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+        <nav className="flex flex-wrap gap-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
           {currentProgram ? (
             <>
               <Link href={`/programs/${currentProgram.id}/audit`} className="hover:text-[var(--text)]">Degree audit</Link>
               <Link href={`/programs/${currentProgram.id}/record`} className="hover:text-[var(--text)]">Academic record</Link>
             </>
           ) : null}
-        </section>
+        </nav>
       </div>
     </ProtectedShell>
   );

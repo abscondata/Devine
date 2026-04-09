@@ -8,6 +8,7 @@ import {
   getFinalAssignmentSet,
   getModuleNextAction,
   getModuleStanding,
+  getStandingStatus,
   isReadingIncomplete,
 } from "@/lib/academic-standing";
 import {
@@ -43,7 +44,6 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  // ─── RESOLVE PROGRAM ───
   const { data: ownedPrograms } = await supabase
     .from("programs")
     .select("id, title")
@@ -63,7 +63,6 @@ export default async function DashboardPage() {
     );
   }
 
-  // ─── RESOLVE CURRENT TERM ───
   const { data: currentTerm } = await supabase
     .from("academic_terms")
     .select("id, title, starts_at, ends_at")
@@ -71,16 +70,11 @@ export default async function DashboardPage() {
     .eq("is_current", true)
     .maybeSingle();
 
-  // ─── TERM COURSES ───
   const { data: termCourseRows } = currentTerm
-    ? await supabase
-        .from("term_courses")
-        .select("course_id")
-        .eq("term_id", currentTerm.id)
+    ? await supabase.from("term_courses").select("course_id").eq("term_id", currentTerm.id)
     : { data: [] };
   const termCourseIds = (termCourseRows ?? []).map((r) => r.course_id);
 
-  // ─── LOAD TERM COURSE DATA ───
   const { data: courses } = termCourseIds.length
     ? await supabase
         .from("courses")
@@ -92,39 +86,23 @@ export default async function DashboardPage() {
   const courseIds = (courses ?? []).map((c) => c.id);
 
   const { data: modules } = courseIds.length
-    ? await supabase
-        .from("modules")
-        .select("id, course_id, title, position")
-        .in("course_id", courseIds)
-        .order("position", { ascending: true })
+    ? await supabase.from("modules").select("id, course_id, title, position").in("course_id", courseIds).order("position", { ascending: true })
     : { data: [] };
 
   const moduleIds = (modules ?? []).map((m) => m.id);
 
   const { data: readings } = moduleIds.length
-    ? await supabase
-        .from("readings")
-        .select("id, module_id, title, author, status, estimated_hours, position")
-        .in("module_id", moduleIds)
-        .order("position", { ascending: true })
+    ? await supabase.from("readings").select("id, module_id, title, author, status, estimated_hours, position").in("module_id", moduleIds).order("position", { ascending: true })
     : { data: [] };
 
   const { data: assignments } = moduleIds.length
-    ? await supabase
-        .from("assignments")
-        .select("id, module_id, title, assignment_type, due_at")
-        .in("module_id", moduleIds)
-        .order("due_at", { ascending: true })
+    ? await supabase.from("assignments").select("id, module_id, title, assignment_type, due_at").in("module_id", moduleIds).order("due_at", { ascending: true })
     : { data: [] };
 
   const assignmentIds = (assignments ?? []).map((a) => a.id);
 
   const { data: submissions } = assignmentIds.length
-    ? await supabase
-        .from("submissions")
-        .select("id, assignment_id, is_final, created_at")
-        .eq("user_id", user.id)
-        .in("assignment_id", assignmentIds)
+    ? await supabase.from("submissions").select("id, assignment_id, is_final, created_at").eq("user_id", user.id).in("assignment_id", assignmentIds)
     : { data: [] };
 
   const finalSubmissionIds = (submissions ?? []).filter((s) => s.is_final).map((s) => s.id);
@@ -135,17 +113,12 @@ export default async function DashboardPage() {
   const assignmentStatus = buildAssignmentStatusMap(submissions ?? [], critiques ?? []);
   const finalSet = getFinalAssignmentSet(assignmentStatus);
 
-  // ─── TERM SCHEDULE ROWS ───
   const { data: scheduleRows } = currentTerm
-    ? await supabase
-        .from("term_assignment_schedule")
-        .select("assignment_id, default_due_at, current_due_at, revised_at")
-        .eq("term_id", currentTerm.id)
+    ? await supabase.from("term_assignment_schedule").select("assignment_id, default_due_at, current_due_at, revised_at").eq("term_id", currentTerm.id)
     : { data: [] as TermAssignmentScheduleRow[] };
   const scheduleByAssignment = new Map<string, TermAssignmentScheduleRow>();
   (scheduleRows ?? []).forEach((row) => scheduleByAssignment.set(row.assignment_id, row));
 
-  // ─── BUILD PER-MODULE MAPS ───
   type ReadingRow = NonNullable<typeof readings>[number];
   type AssignmentRow = NonNullable<typeof assignments>[number];
 
@@ -166,7 +139,6 @@ export default async function DashboardPage() {
   const moduleToCourse = new Map<string, string>();
   (modules ?? []).forEach((m) => moduleToCourse.set(m.id, m.course_id));
 
-  // ─── PER-COURSE SUMMARIES ───
   type CourseSummary = {
     course: NonNullable<typeof courses>[number];
     currentUnit: { id: string; title: string; position: number; completedTasks: number; totalTasks: number } | null;
@@ -182,9 +154,7 @@ export default async function DashboardPage() {
   };
 
   const termCourseSummaries: CourseSummary[] = (courses ?? []).map((course) => {
-    const courseModules = (modules ?? [])
-      .filter((m) => m.course_id === course.id)
-      .sort((a, b) => a.position - b.position);
+    const courseModules = (modules ?? []).filter((m) => m.course_id === course.id).sort((a, b) => a.position - b.position);
 
     let completedTasks = 0;
     let totalTasks = 0;
@@ -235,28 +205,18 @@ export default async function DashboardPage() {
     const isComplete = totalTasks > 0 && completedTasks >= totalTasks;
 
     return {
-      course,
-      currentUnit,
-      totalUnits: courseModules.length,
-      completedTasks,
-      totalTasks,
-      finalAssignments: finalCount,
-      totalAssignments: courseAssignments.length,
-      unreadReadings,
-      openWrittenWork,
-      nextAction,
-      isComplete,
+      course, currentUnit, totalUnits: courseModules.length, completedTasks, totalTasks,
+      finalAssignments: finalCount, totalAssignments: courseAssignments.length,
+      unreadReadings, openWrittenWork, nextAction, isComplete,
     };
   });
 
-  // ─── CROSS-COURSE QUEUES ───
   const allUnreadReadings = termCourseSummaries.flatMap((s) =>
     s.unreadReadings.map((r) => ({ ...r, courseCode: s.course.code }))
   );
   const allOpenWork = termCourseSummaries.flatMap((s) =>
     s.openWrittenWork.map((a) => ({ ...a, courseCode: s.course.code }))
   );
-  // Sort open work by due date (nulls last)
   allOpenWork.sort((a, b) => {
     if (!a.due_at && !b.due_at) return 0;
     if (!a.due_at) return 1;
@@ -264,7 +224,6 @@ export default async function DashboardPage() {
     return a.due_at.localeCompare(b.due_at);
   });
 
-  // ─── TERM SCHEDULE ───
   const schedule = currentTerm?.starts_at && currentTerm?.ends_at
     ? computeTermSchedule({
         termStartsAt: currentTerm.starts_at,
@@ -276,7 +235,6 @@ export default async function DashboardPage() {
       })
     : null;
 
-  // Enrich reading queue with target dates
   const enrichedReadings = allUnreadReadings.map((r) => {
     const unitSched = schedule?.unitSchedules.get(r.module_id);
     if (!unitSched) return { ...r, targetDate: null as Date | null };
@@ -292,7 +250,6 @@ export default async function DashboardPage() {
     return a.targetDate.getTime() - b.targetDate.getTime();
   });
 
-  // Enrich writing queue with due dates from term schedule > canonical > computed
   const enrichedWork = allOpenWork.map((a) => {
     const schedRow = scheduleByAssignment.get(a.id);
     const unitSched = schedule?.unitSchedules.get(a.module_id) ?? null;
@@ -310,9 +267,6 @@ export default async function DashboardPage() {
     return a.computedDue.getTime() - b.computedDue.getTime();
   });
 
-  const nextDue = enrichedWork[0] ?? null;
-
-  // ─── THIS WEEK: unified view of all obligations due this week ───
   type WeekItem = {
     id: string;
     title: string | null;
@@ -328,12 +282,8 @@ export default async function DashboardPage() {
   enrichedReadings.forEach((r) => {
     if (r.targetDate && (isDueThisWeek(r.targetDate) || isPast(r.targetDate))) {
       thisWeekItems.push({
-        id: r.id,
-        title: r.title,
-        kind: "reading",
-        courseCode: r.courseCode,
-        date: r.targetDate,
-        overdue: isPast(r.targetDate),
+        id: r.id, title: r.title, kind: "reading", courseCode: r.courseCode,
+        date: r.targetDate, overdue: isPast(r.targetDate),
       });
     }
   });
@@ -341,56 +291,73 @@ export default async function DashboardPage() {
   enrichedWork.forEach((a) => {
     if (a.computedDue && (isDueThisWeek(a.computedDue) || isPast(a.computedDue))) {
       thisWeekItems.push({
-        id: a.id,
-        title: a.title,
-        kind: "writing",
-        courseCode: a.courseCode,
-        date: a.computedDue,
-        overdue: isPast(a.computedDue),
-        assignmentId: a.id,
+        id: a.id, title: a.title, kind: "writing", courseCode: a.courseCode,
+        date: a.computedDue, overdue: isPast(a.computedDue), assignmentId: a.id,
       });
     }
   });
 
   thisWeekItems.sort((a, b) => a.date.getTime() - b.date.getTime());
 
-  // Upcoming: all items NOT this week and NOT overdue, limited
-  const upcomingReadings = enrichedReadings.filter((r) => r.targetDate && !isPast(r.targetDate) && !isDueThisWeek(r.targetDate));
   const upcomingWork = enrichedWork.filter((a) => a.computedDue && !isPast(a.computedDue) && !isDueThisWeek(a.computedDue));
+  const upcomingReadings = enrichedReadings.filter((r) => r.targetDate && !isPast(r.targetDate) && !isDueThisWeek(r.targetDate));
+
+  // Find the single primary course + unit to feature
+  const primaryCourse = termCourseSummaries.find((s) => s.currentUnit && !s.isComplete) ?? termCourseSummaries[0] ?? null;
 
   return (
     <ProtectedShell userEmail={user.email ?? null}>
-      <div className="space-y-8">
+      <div className="space-y-10">
 
-        <header className="space-y-2">
+        {/* ─── Term heading ─── */}
+        <header className="space-y-1">
           <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
             {currentProgram.title}
           </p>
           {currentTerm ? (
             <>
-              <h1 className="text-3xl"><Link href="/term">{currentTerm.title}</Link></h1>
+              <h1 className="text-3xl">{currentTerm.title}</h1>
               <div className="flex flex-wrap items-center gap-x-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                 {schedule ? <span>Week {schedule.currentWeek} of {schedule.totalWeeks}</span> : null}
+                <span>{formatDate(currentTerm.starts_at)} – {formatDate(currentTerm.ends_at)}</span>
                 <span>{termCourseSummaries.length} course{termCourseSummaries.length === 1 ? "" : "s"}</span>
-                <Link href="/term" className="hover:text-[var(--text)]">Full term</Link>
-                <Link href="/term/review" className="hover:text-[var(--text)]">Review packet</Link>
               </div>
             </>
           ) : (
-            <h1 className="text-3xl">My Term</h1>
+            <>
+              <h1 className="text-3xl">College Home</h1>
+              <p className="text-sm text-[var(--muted)]">
+                No active term. The academic term has not yet been configured.
+              </p>
+            </>
           )}
         </header>
 
-        {/* ─── No term fallback ─── */}
-        {!currentTerm || !termCourseSummaries.length ? (
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
-            <p className="text-sm text-[var(--muted)]">
-              No active term. Set up a term with courses to begin.
-            </p>
-          </div>
+        {/* ─── Current work: the single most important truth ─── */}
+        {primaryCourse?.currentUnit ? (
+          <section className="space-y-3">
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Current Work</p>
+            <Link
+              href={`/modules/${primaryCourse.currentUnit.id}`}
+              className="block rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 transition hover:border-[var(--accent-soft)]"
+            >
+              <div className="space-y-2">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                  {primaryCourse.course.code} · Unit {primaryCourse.currentUnit.position + 1} of {primaryCourse.totalUnits}
+                </p>
+                <h2 className="text-xl">{primaryCourse.currentUnit.title}</h2>
+                {primaryCourse.nextAction ? (
+                  <p className="text-sm text-[var(--muted)]">{primaryCourse.nextAction.title}</p>
+                ) : null}
+                <p className="text-xs text-[var(--muted)]">
+                  {primaryCourse.currentUnit.completedTasks} of {primaryCourse.currentUnit.totalTasks} tasks complete
+                </p>
+              </div>
+            </Link>
+          </section>
         ) : null}
 
-        {/* ─── This Week ─── */}
+        {/* ─── This week ─── */}
         {thisWeekItems.length > 0 ? (
           <section className="space-y-3">
             <h2 className="text-lg">This Week</h2>
@@ -420,61 +387,45 @@ export default async function DashboardPage() {
             </div>
           </section>
         ) : currentTerm ? (
-          <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
+          <section className="space-y-3">
+            <h2 className="text-lg">This Week</h2>
             <p className="text-sm text-[var(--muted)]">No obligations due this week.</p>
           </section>
         ) : null}
 
-        {/* ─── Courses ─── */}
+        {/* ─── Term courses ─── */}
         {termCourseSummaries.length > 0 ? (
           <section className="space-y-3">
-            <h2 className="text-lg">Courses</h2>
-            <div className="space-y-3">
-              {termCourseSummaries.map((summary) => {
-                const unitSched = summary.currentUnit ? schedule?.unitSchedules.get(summary.currentUnit.id) : null;
-                return (
-                  <div key={summary.course.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
-                    <div className="p-5 space-y-3">
-                      <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div className="space-y-0.5">
-                          <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                            {summary.course.code} · {summary.course.credits_or_weight} cr
-                          </p>
-                          <h3 className="text-lg font-semibold">{summary.course.title}</h3>
-                        </div>
-                        <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] shrink-0">
-                          {summary.isComplete ? "Complete" : `${summary.completedTasks} of ${summary.totalTasks}`}
-                        </p>
-                      </div>
-                      {summary.currentUnit ? (
-                        <div className="flex flex-wrap items-center justify-between gap-4">
-                          <p className="text-sm text-[var(--muted)]">
-                            Unit {summary.currentUnit.position + 1}: {summary.currentUnit.title}
-                          </p>
-                          {unitSched ? (
-                            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                              Due {formatScheduleDate(unitSched.endsAt)}
-                            </p>
-                          ) : null}
-                        </div>
-                      ) : null}
-                      {summary.nextAction ? (
-                        <p className="text-xs text-[var(--muted)]">Next: {summary.nextAction.title}</p>
-                      ) : null}
-                    </div>
-                    <div className="border-t border-[var(--border)] flex divide-x divide-[var(--border)] text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                      <Link href={`/courses/${summary.course.id}`} className="flex-1 px-5 py-3 text-center transition hover:bg-[var(--surface-muted)] hover:text-[var(--text)]">
-                        Syllabus
-                      </Link>
-                      {summary.currentUnit ? (
-                        <Link href={`/modules/${summary.currentUnit.id}`} className="flex-1 px-5 py-3 text-center transition hover:bg-[var(--surface-muted)] hover:text-[var(--text)]">
-                          Continue unit
-                        </Link>
-                      ) : null}
-                    </div>
+            <h2 className="text-lg">Term Courses</h2>
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
+              {termCourseSummaries.map((summary) => (
+                <Link
+                  key={summary.course.id}
+                  href={`/courses/${summary.course.id}`}
+                  className="flex flex-wrap items-center justify-between gap-4 px-5 py-4 transition hover:bg-[var(--surface-muted)]"
+                >
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-semibold">
+                      {summary.course.code} — {summary.course.title}
+                    </p>
+                    {summary.currentUnit ? (
+                      <p className="text-xs text-[var(--muted)]">
+                        Unit {summary.currentUnit.position + 1}: {summary.currentUnit.title}
+                      </p>
+                    ) : summary.isComplete ? (
+                      <p className="text-xs text-[var(--muted)]">All units complete</p>
+                    ) : null}
                   </div>
-                );
-              })}
+                  <div className="text-right shrink-0 space-y-0.5">
+                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                      {summary.isComplete ? "Complete" : `${summary.completedTasks}/${summary.totalTasks}`}
+                    </p>
+                    <p className="text-xs text-[var(--muted)]">
+                      {summary.course.credits_or_weight} credits
+                    </p>
+                  </div>
+                </Link>
+              ))}
             </div>
           </section>
         ) : null}
@@ -514,6 +465,14 @@ export default async function DashboardPage() {
               ))}
             </div>
           </section>
+        ) : null}
+
+        {/* ─── Quick links ─── */}
+        {currentTerm ? (
+          <nav className="flex flex-wrap gap-x-5 gap-y-1 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            <Link href="/term" className="hover:text-[var(--text)]">Full term view</Link>
+            <Link href="/term/review" className="hover:text-[var(--text)]">Term review packet</Link>
+          </nav>
         ) : null}
       </div>
     </ProtectedShell>

@@ -6,7 +6,7 @@ import { ProtectedShell } from "@/components/protected-shell";
 function formatDate(value?: string | null) {
   if (!value) return "—";
   return new Date(value).toLocaleDateString("en-US", {
-    month: "short",
+    month: "long",
     day: "numeric",
     year: "numeric",
   });
@@ -19,61 +19,28 @@ export default async function ProgramWorkPage({
 }) {
   const { id } = await params;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
 
-  if (!user) {
-    redirect("/login");
-  }
+  const { data: program } = await supabase.from("programs").select("id, title").eq("id", id).single();
+  if (!program) notFound();
 
-  const { data: program } = await supabase
-    .from("programs")
-    .select("id, title")
-    .eq("id", id)
-    .single();
-
-  if (!program) {
-    notFound();
-  }
-
-  // All courses → modules → assignments → submissions
-  const { data: courses } = await supabase
-    .from("courses")
-    .select("id, title, code, sequence_position")
-    .eq("program_id", id)
-    .eq("is_active", true)
-    .order("sequence_position", { ascending: true });
-
+  const { data: courses } = await supabase.from("courses").select("id, title, code, sequence_position").eq("program_id", id).eq("is_active", true).order("sequence_position", { ascending: true });
   const courseIds = (courses ?? []).map((c) => c.id);
-  const { data: modules } = courseIds.length
-    ? await supabase.from("modules").select("id, course_id, title, position").in("course_id", courseIds).order("position", { ascending: true })
-    : { data: [] };
-
+  const { data: modules } = courseIds.length ? await supabase.from("modules").select("id, course_id, title, position").in("course_id", courseIds).order("position", { ascending: true }) : { data: [] };
   const moduleIds = (modules ?? []).map((m) => m.id);
-  const { data: assignments } = moduleIds.length
-    ? await supabase.from("assignments").select("id, module_id, title, assignment_type").in("module_id", moduleIds)
-    : { data: [] };
-
+  const { data: assignments } = moduleIds.length ? await supabase.from("assignments").select("id, module_id, title, assignment_type").in("module_id", moduleIds) : { data: [] };
   const assignmentIds = (assignments ?? []).map((a) => a.id);
-  const { data: submissions } = assignmentIds.length
-    ? await supabase.from("submissions").select("id, assignment_id, version, is_final, created_at").eq("user_id", user.id).in("assignment_id", assignmentIds).order("version", { ascending: false })
-    : { data: [] };
-
+  const { data: submissions } = assignmentIds.length ? await supabase.from("submissions").select("id, assignment_id, version, is_final, created_at").eq("user_id", user.id).in("assignment_id", assignmentIds).order("version", { ascending: false }) : { data: [] };
   const finalSubmissionIds = (submissions ?? []).filter((s) => s.is_final).map((s) => s.id);
-  const { data: critiques } = finalSubmissionIds.length
-    ? await supabase.from("critiques").select("id, submission_id").in("submission_id", finalSubmissionIds)
-    : { data: [] };
+  const { data: critiques } = finalSubmissionIds.length ? await supabase.from("critiques").select("id, submission_id").in("submission_id", finalSubmissionIds) : { data: [] };
 
   const critiqueSet = new Set((critiques ?? []).map((c) => c.submission_id));
-
-  // Maps
   const moduleToCourse = new Map<string, string>();
   (modules ?? []).forEach((m) => moduleToCourse.set(m.id, m.course_id));
   const coursesById = new Map((courses ?? []).map((c) => [c.id, c]));
   const modulesById = new Map((modules ?? []).map((m) => [m.id, m]));
 
-  // Build per-assignment summary
   type WorkItem = {
     assignmentId: string;
     assignmentTitle: string;
@@ -92,11 +59,7 @@ export default async function ProgramWorkPage({
 
   type SubRow = NonNullable<typeof submissions>[number];
   const submissionsByAssignment = new Map<string, SubRow[]>();
-  (submissions ?? []).forEach((s) => {
-    const list = submissionsByAssignment.get(s.assignment_id) ?? [];
-    list.push(s);
-    submissionsByAssignment.set(s.assignment_id, list);
-  });
+  (submissions ?? []).forEach((s) => { const l = submissionsByAssignment.get(s.assignment_id) ?? []; l.push(s); submissionsByAssignment.set(s.assignment_id, l); });
 
   const workItems: WorkItem[] = (assignments ?? []).map((a) => {
     const courseId = moduleToCourse.get(a.module_id);
@@ -105,20 +68,12 @@ export default async function ProgramWorkPage({
     const subs = submissionsByAssignment.get(a.id) ?? [];
     const finalSub = subs.find((s) => s.is_final);
     const latest = subs[0];
-
     return {
-      assignmentId: a.id,
-      assignmentTitle: a.title,
-      assignmentType: a.assignment_type,
-      courseCode: course?.code ?? null,
-      courseTitle: course?.title ?? "",
-      courseSequence: course?.sequence_position ?? null,
-      moduleTitle: mod?.title ?? "",
-      modulePosition: mod?.position ?? 0,
-      latestVersion: latest?.version ?? null,
-      isFinal: Boolean(finalSub),
-      finalDate: finalSub?.created_at ?? null,
-      hasCritique: finalSub ? critiqueSet.has(finalSub.id) : false,
+      assignmentId: a.id, assignmentTitle: a.title, assignmentType: a.assignment_type,
+      courseCode: course?.code ?? null, courseTitle: course?.title ?? "", courseSequence: course?.sequence_position ?? null,
+      moduleTitle: mod?.title ?? "", modulePosition: mod?.position ?? 0,
+      latestVersion: latest?.version ?? null, isFinal: Boolean(finalSub),
+      finalDate: finalSub?.created_at ?? null, hasCritique: finalSub ? critiqueSet.has(finalSub.id) : false,
       totalVersions: subs.length,
     };
   });
@@ -131,30 +86,20 @@ export default async function ProgramWorkPage({
     return a.assignmentTitle.localeCompare(b.assignmentTitle);
   });
 
-  // Group by course
   const byCourse = new Map<string, WorkItem[]>();
-  workItems.forEach((item) => {
-    const key = item.courseCode ?? item.courseTitle;
-    const list = byCourse.get(key) ?? [];
-    list.push(item);
-    byCourse.set(key, list);
-  });
+  workItems.forEach((item) => { const key = item.courseCode ?? item.courseTitle; const l = byCourse.get(key) ?? []; l.push(item); byCourse.set(key, l); });
 
   const finalCount = workItems.filter((w) => w.isFinal).length;
   const draftCount = workItems.filter((w) => !w.isFinal && w.totalVersions > 0).length;
   const critiquedCount = workItems.filter((w) => w.hasCritique).length;
+  const unsubmittedCount = workItems.filter((w) => w.totalVersions === 0).length;
 
   return (
     <ProtectedShell userEmail={user.email ?? null}>
-      <div className="space-y-8 max-w-4xl print:max-w-none">
+      <div className="space-y-10">
 
-        <header className="space-y-4 border-b border-[var(--border)] pb-6">
-          <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)] print:hidden">
-            <Link href="/dashboard">My Term</Link>
-            <span>/</span>
-            <Link href={`/programs/${program.id}/record`}>Record</Link>
-          </div>
-          <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
+        <header className="space-y-2 border-b border-[var(--border)] pb-6">
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
             {program.title} · Writing Dossier
           </p>
           <h1 className="text-3xl">Academic Writing Record</h1>
@@ -162,24 +107,27 @@ export default async function ProgramWorkPage({
             <span>{workItems.length} assignments</span>
             <span>{finalCount} finalized</span>
             <span>{draftCount} in draft</span>
+            <span>{unsubmittedCount} not submitted</span>
             <span>{critiquedCount} critiqued</span>
           </div>
         </header>
 
         {Array.from(byCourse.entries()).map(([courseKey, items]) => (
           <section key={courseKey} className="space-y-3">
-            <h2 className="text-lg">{items[0].courseCode ? `${items[0].courseCode} — ` : ""}{items[0].courseTitle}</h2>
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
+            <div className="border-b border-[var(--border)] pb-2">
+              <h2 className="text-lg">{items[0].courseCode ? `${items[0].courseCode} — ` : ""}{items[0].courseTitle}</h2>
+            </div>
+            <div className="divide-y divide-[var(--border)]">
               {items.map((item) => (
                 <Link
                   key={item.assignmentId}
                   href={`/assignments/${item.assignmentId}`}
-                  className="flex flex-wrap items-center justify-between gap-4 px-5 py-3 transition hover:bg-[var(--surface-muted)]"
+                  className="flex flex-wrap items-center justify-between gap-4 py-3 group"
                 >
                   <div className="space-y-0.5">
-                    <p className="text-sm font-semibold">{item.assignmentTitle}</p>
+                    <p className="text-sm font-semibold group-hover:text-[var(--accent-soft)]">{item.assignmentTitle}</p>
                     <p className="text-xs text-[var(--muted)]">
-                      {item.moduleTitle} · {item.assignmentType.replace(/_/g, " ")}
+                      Unit {item.modulePosition + 1}: {item.moduleTitle} · {item.assignmentType.replace(/_/g, " ")}
                       {item.totalVersions > 0 ? ` · ${item.totalVersions} version${item.totalVersions === 1 ? "" : "s"}` : ""}
                     </p>
                   </div>
@@ -202,10 +150,6 @@ export default async function ProgramWorkPage({
         {!workItems.length ? (
           <p className="text-sm text-[var(--muted)]">No written work assigned yet.</p>
         ) : null}
-
-        <footer className="border-t border-[var(--border)] pt-4 text-xs text-[var(--muted)]">
-          <p>{program.title} · Writing dossier · {workItems.length} assignments · {finalCount} finalized · {critiquedCount} critiqued</p>
-        </footer>
       </div>
     </ProtectedShell>
   );

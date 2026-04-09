@@ -14,12 +14,11 @@ import {
   buildThesisSummaryByCourseId,
 } from "@/lib/thesis-governance";
 import { getReviewProgram } from "@/lib/review-access";
-import { DocumentSection, FormalDocumentLayout } from "@/components/formal-document";
 
 function formatDate(value?: string | null) {
-  if (!value) return "--";
+  if (!value) return "—";
   return new Date(value).toLocaleDateString("en-US", {
-    month: "short",
+    month: "long",
     day: "numeric",
     year: "numeric",
   });
@@ -255,116 +254,154 @@ export default async function ReviewResearchPage({
     finalAssignmentIds: new Set(researchFinals.map((submission) => submission.assignment_id)),
   });
 
-  const recordDate = formatDate(new Date().toISOString());
+  const totalResearchCourses = researchCourses.length;
+  const completedResearchCourses = researchCourses.filter((c) => c.isComplete).length;
+  const now = formatDate(new Date().toISOString());
 
   return (
-    <FormalDocumentLayout
-      backLink={{ href: `/review/${token}`, label: "Program review packet" }}
-      documentType="Research and Synthesis Register"
-      title={program.title}
-      description="Formal register of research formation, synthesis work, and capstone status."
-      recordDate={recordDate}
-      actions={[
-        { href: `/review/${token}/chronology`, label: "Academic chronology" },
-        { href: `/review/${token}/record`, label: "Academic record" },
-      ]}
-    >
-      <DocumentSection title="Lane Standing">
+    <div className="space-y-10 max-w-4xl print:max-w-none">
+
+      {/* ─── Document header ─── */}
+      <header className="space-y-4 border-b border-[var(--border)] pb-6">
+        <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)] print:hidden">
+          <Link href={`/review/${token}`}>Program review packet</Link>
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs uppercase tracking-[0.2em] text-[var(--muted)] print:hidden">
+          <Link href={`/review/${token}/charter`}>Charter</Link>
+          <Link href={`/review/${token}/record`}>Record</Link>
+          <Link href={`/review/${token}/chronology`}>Chronology</Link>
+          <Link href={`/review/${token}/work`}>Work</Link>
+          <span className="text-[var(--text)]">Research</span>
+          <Link href={`/review/${token}/thesis`}>Thesis</Link>
+          <Link href={`/review/${token}/readiness`}>Readiness</Link>
+        </div>
+        <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
+          {program.title} · Research and Synthesis Register
+        </p>
+        <h1 className="text-3xl">Research Register</h1>
+        <div className="flex flex-wrap gap-x-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+          <span>{totalResearchCourses} research courses</span>
+          <span>{completedResearchCourses} complete</span>
+          {thesisSummary?.hasProject ? (
+            <span>Thesis: {thesisSummary.requiredCompleted}/{thesisSummary.requiredTotal} milestones</span>
+          ) : (
+            <span>Thesis: not yet opened</span>
+          )}
+          {researchFinals.length > 0 ? (
+            <span>{researchFinals.length} final submissions</span>
+          ) : null}
+        </div>
+        <p className="text-xs text-[var(--muted)]">Generated {now}</p>
+      </header>
+
+      {/* ─── Requirement standing ─── */}
+      <section className="space-y-3">
+        <h2 className="text-lg">Requirement Standing</h2>
         {researchBlocks.length ? (
           <div className="space-y-4">
             {researchBlocks.map((summary) => (
               <div
                 key={summary.block.id}
-                className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm text-[var(--muted)] space-y-2"
+                className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-2"
               >
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Requirement Block
-                </p>
-                <p className="text-lg font-semibold text-[var(--text)]">
-                  {summary.block.title}
-                </p>
-                <p>{summary.block.description ?? "No description recorded."}</p>
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Status {summary.status} · Satisfied {summary.satisfied ? "Yes" : "No"}
-                </p>
-                <p className="text-xs text-[var(--muted)]">
-                  Completed courses {summary.completedCourseIds.length} · Required{" "}
-                  {summary.block.minimum_courses_required ?? "--"}
-                </p>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-semibold text-[var(--text)]">
+                    {summary.block.title}
+                  </p>
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                    {summary.satisfied ? "Satisfied" : summary.hasActivity ? "In progress" : "Incomplete"}
+                  </p>
+                </div>
+                {summary.block.description ? (
+                  <p className="text-sm text-[var(--muted)]">{summary.block.description}</p>
+                ) : null}
+                <div className="flex flex-wrap gap-x-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                  <span>{summary.completedCourseIds.length} of {summary.assignedCourseIds.length} courses complete</span>
+                  {summary.block.minimum_courses_required ? (
+                    <span>{summary.block.minimum_courses_required} required</span>
+                  ) : null}
+                  {summary.block.minimum_credits_required ? (
+                    <span>{summary.completedCredits} of {summary.block.minimum_credits_required} credits</span>
+                  ) : null}
+                </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)]">
-            No Research and Synthesis requirement block is recorded for this program.
-          </div>
+          <p className="text-sm text-[var(--muted)]">
+            No research requirement block is recorded for this program.
+          </p>
         )}
-      </DocumentSection>
+      </section>
 
-      <DocumentSection title="Research Courses">
+      {/* ─── Research courses ─── */}
+      <section className="space-y-3">
+        <h2 className="text-lg">Research Courses</h2>
         {researchCourses.length ? (
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3 text-sm text-[var(--muted)]">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
             {researchCourses.map((course) => (
-              <div key={course.id} className="flex flex-wrap items-center justify-between gap-2">
-                <span>
-                  {course.code ? `${course.code} - ` : ""}
-                  {course.title}
-                </span>
-                <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+              <Link
+                key={course.id}
+                href={`/review/${token}/courses/${course.id}`}
+                className="flex flex-wrap items-center justify-between gap-4 px-5 py-3 transition hover:bg-[var(--surface-muted)]"
+              >
+                <div className="space-y-0.5">
+                  <p className="text-sm font-semibold">
+                    {course.code ? `${course.code} — ` : ""}{course.title}
+                  </p>
+                  <p className="text-xs text-[var(--muted)]">
+                    {course.completedTasks} of {course.totalTasks} tasks complete
+                  </p>
+                </div>
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                   {getStandingLabel(course.status)}
-                </span>
-              </div>
+                </p>
+              </Link>
             ))}
           </div>
         ) : (
-          <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)]">
-            No research-course mapping recorded yet.
-          </div>
+          <p className="text-sm text-[var(--muted)]">
+            No research courses are mapped to this program.
+          </p>
         )}
-      </DocumentSection>
+        <div className="flex flex-wrap gap-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)] print:hidden">
+          <Link href={`/review/${token}/readiness`}>Research readiness packet</Link>
+        </div>
+      </section>
 
-      <DocumentSection title="Thesis Project">
+      {/* ─── Thesis project ─── */}
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h2 className="text-lg">Thesis Project</h2>
+          {rsynCourse ? (
+            <Link
+              href={`/review/${token}/thesis`}
+              className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] print:hidden"
+            >
+              View thesis dossier
+            </Link>
+          ) : null}
+        </div>
         {rsynCourse ? (
           thesisSummary && thesisSummary.hasProject ? (
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm text-[var(--muted)] space-y-3">
-              <p className="text-sm font-semibold text-[var(--text)]">
-                {thesisSummary.statusLabel}
-              </p>
-              <p>
-                Required milestones complete {thesisSummary.requiredCompleted}/
-                {thesisSummary.requiredTotal}.
-              </p>
-              <p>
-                Candidacy readiness:{" "}
-                {thesisSummary.candidacyReady ? "Established" : "Not yet established"}.
-              </p>
-              <p>
-                Final thesis status:{" "}
-                {thesisSummary.finalThesisReady ? "Final recorded" : "Not yet final"}.
-              </p>
-              <p>
-                Final synthesis reflection:{" "}
-                {thesisSummary.finalSynthesisReady
-                  ? "Recorded"
-                  : "Not yet recorded"}
-                .
-              </p>
-              <Link
-                href={`/review/${token}/thesis`}
-                className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
-              >
-                View thesis dossier
-              </Link>
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-semibold text-[var(--text)]">
+                  {thesisSummary.statusLabel}
+                </p>
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                  {thesisSummary.requiredCompleted}/{thesisSummary.requiredTotal} milestones
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-x-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                <span>Candidacy: {thesisSummary.candidacyReady ? "Established" : "Not established"}</span>
+                <span>Final thesis: {thesisSummary.finalThesisReady ? "Recorded" : "Pending"}</span>
+                <span>Synthesis: {thesisSummary.finalSynthesisReady ? "Recorded" : "Pending"}</span>
+              </div>
             </div>
           ) : (
-            <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)] space-y-2">
-              <p>No thesis project has been recorded for RSYN 720 yet.</p>
-              <Link
-                href={`/review/${token}/thesis`}
-                className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
-              >
-                View thesis dossier
-              </Link>
+            <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)]">
+              No thesis project has been opened for RSYN 720.
             </div>
           )
         ) : (
@@ -372,33 +409,37 @@ export default async function ReviewResearchPage({
             RSYN 720 is not recorded for this program.
           </div>
         )}
-      </DocumentSection>
+      </section>
 
-      <DocumentSection title="Current Research Work">
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm text-[var(--muted)] space-y-2">
+      {/* ─── Current research work ─── */}
+      <section className="space-y-3">
+        <h2 className="text-lg">Current Research Work</h2>
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm space-y-2">
           {currentResearchWork.currentModule ? (
             <>
-              <p className="text-sm font-semibold text-[var(--text)]">
-                {currentResearchWork.currentModule.title ?? "Current module"}
+              <p className="font-semibold text-[var(--text)]">
+                {currentResearchWork.currentModule.title}
               </p>
               {currentResearchWork.nextAction ? (
                 <>
-                  <p>{currentResearchWork.nextAction.title}</p>
-                  <p>{currentResearchWork.nextAction.reason}</p>
+                  <p className="text-[var(--muted)]">{currentResearchWork.nextAction.title}</p>
+                  <p className="text-xs text-[var(--muted)]">{currentResearchWork.nextAction.reason}</p>
                 </>
               ) : (
-                <p>All required work in the current research module is complete.</p>
+                <p className="text-[var(--muted)]">All required work in the current research module is complete.</p>
               )}
             </>
           ) : (
-            <p>No active research work is recorded.</p>
+            <p className="text-[var(--muted)]">No active research work is recorded.</p>
           )}
         </div>
-      </DocumentSection>
+      </section>
 
-      <DocumentSection title="Final Research Submissions">
+      {/* ─── Final research submissions ─── */}
+      <section className="space-y-3">
+        <h2 className="text-lg">Final Research Submissions</h2>
         {researchFinals.length ? (
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-sm text-[var(--muted)] space-y-3">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
             {researchFinals.map((submission) => {
               const assignment = researchAssignments?.find(
                 (item) => item.id === submission.assignment_id
@@ -406,9 +447,9 @@ export default async function ReviewResearchPage({
               return (
                 <div
                   key={submission.id}
-                  className="flex flex-wrap items-center justify-between gap-2"
+                  className="flex flex-wrap items-center justify-between gap-4 px-5 py-3"
                 >
-                  <span>{assignment?.title ?? "Assignment"}</span>
+                  <span className="text-sm">{assignment?.title ?? "Assignment"}</span>
                   <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                     Final recorded {formatDate(submission.created_at)}
                   </span>
@@ -418,10 +459,17 @@ export default async function ReviewResearchPage({
           </div>
         ) : (
           <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-sm text-[var(--muted)]">
-            No final research submissions are recorded yet.
+            No final research submissions are recorded.
           </div>
         )}
-      </DocumentSection>
-    </FormalDocumentLayout>
+      </section>
+
+      {/* ─── Document footer ─── */}
+      <footer className="border-t border-[var(--border)] pt-4 text-xs text-[var(--muted)]">
+        <p>
+          {program.title} · Research register · {totalResearchCourses} courses · {completedResearchCourses} complete · Generated {now}
+        </p>
+      </footer>
+    </div>
   );
 }

@@ -11,12 +11,11 @@ import {
   buildThesisSummaryByCourseId,
 } from "@/lib/thesis-governance";
 import { getReviewProgram } from "@/lib/review-access";
-import { DocumentSection, FormalDocumentLayout } from "@/components/formal-document";
 
 function formatDate(value?: string | null) {
-  if (!value) return "--";
+  if (!value) return "—";
   return new Date(value).toLocaleDateString("en-US", {
-    month: "short",
+    month: "long",
     day: "numeric",
     year: "numeric",
   });
@@ -195,7 +194,7 @@ export default async function ReviewChronologyPage({
         events.push({
           date: finalDate,
           label: "Course officially complete",
-          detail: `${course.code ? `${course.code} - ` : ""}${course.title}`,
+          detail: `${course.code ? `${course.code} — ` : ""}${course.title}`,
           linkLabel: "Course dossier",
           linkHref: `/review/${token}/courses/${course.id}`,
         });
@@ -210,7 +209,7 @@ export default async function ReviewChronologyPage({
     const courseId = assignmentToCourse.get(assignment.id);
     const course = courseId ? coursesById.get(courseId) : null;
     if (!module || !course) return;
-    const courseLabel = course.code ? `${course.code} - ` : "";
+    const courseLabel = course.code ? `${course.code} — ` : "";
     events.push({
       date: submission.created_at,
       label: "Final submission recorded",
@@ -230,7 +229,7 @@ export default async function ReviewChronologyPage({
     const courseId = assignmentToCourse.get(assignment.id);
     const course = courseId ? coursesById.get(courseId) : null;
     if (!course) return;
-    const courseLabel = course.code ? `${course.code} - ` : "";
+    const courseLabel = course.code ? `${course.code} — ` : "";
     events.push({
       date: critique.created_at,
       label: "Critique recorded",
@@ -244,27 +243,48 @@ export default async function ReviewChronologyPage({
 
   events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  const recordDate = formatDate(new Date().toISOString());
+  const completedCourses = courseProgress.filter((c) => c.isComplete).length;
+  const now = formatDate(new Date().toISOString());
 
   return (
-    <FormalDocumentLayout
-      backLink={{ href: `/review/${token}`, label: "Program review packet" }}
-      documentType="Academic Chronology"
-      title={program.title}
-      description="Formal ledger of final academic work and completion milestones."
-      recordDate={recordDate}
-      actions={[
-        { href: `/review/${token}/record`, label: "Academic record" },
-        { href: `/review/${token}/work`, label: "Academic work record" },
-      ]}
-    >
-      <DocumentSection title="Chronology">
+    <div className="space-y-10 max-w-4xl print:max-w-none">
+
+      {/* ─── Document header ─── */}
+      <header className="space-y-4 border-b border-[var(--border)] pb-6">
+        <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-[var(--muted)] print:hidden">
+          <Link href={`/review/${token}`}>Program review packet</Link>
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs uppercase tracking-[0.2em] text-[var(--muted)] print:hidden">
+          <Link href={`/review/${token}/charter`}>Charter</Link>
+          <Link href={`/review/${token}/record`}>Record</Link>
+          <span className="text-[var(--text)]">Chronology</span>
+          <Link href={`/review/${token}/work`}>Work</Link>
+          <Link href={`/review/${token}/research`}>Research</Link>
+          <Link href={`/review/${token}/thesis`}>Thesis</Link>
+          <Link href={`/review/${token}/readiness`}>Readiness</Link>
+        </div>
+        <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
+          {program.title} · Academic Chronology
+        </p>
+        <h1 className="text-3xl">Academic Chronology</h1>
+        <div className="flex flex-wrap gap-x-6 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+          <span>{events.length} events</span>
+          <span>{finalSubmissions.length} final submissions</span>
+          <span>{critiques?.length ?? 0} critiques</span>
+          <span>{completedCourses} courses complete</span>
+        </div>
+        <p className="text-xs text-[var(--muted)]">Generated {now}</p>
+      </header>
+
+      {/* ─── Chronology ledger ─── */}
+      <section className="space-y-3">
+        <h2 className="text-lg">Chronology</h2>
         {events.length ? (
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-4">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
             {events.map((event, index) => (
               <div
                 key={`${event.label}-${event.date}-${index}`}
-                className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--border)] pb-4 last:border-b-0 last:pb-0"
+                className="flex flex-wrap items-start justify-between gap-4 px-5 py-4"
               >
                 <div className="space-y-1">
                   <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
@@ -272,14 +292,16 @@ export default async function ReviewChronologyPage({
                   </p>
                   <p className="text-sm text-[var(--text)]">{event.detail}</p>
                 </div>
-                <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                  {formatDate(event.date)}
+                <div className="text-right shrink-0 space-y-1">
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                    {formatDate(event.date)}
+                  </p>
+                  {event.linkHref ? (
+                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] no-print">
+                      <Link href={event.linkHref}>{event.linkLabel ?? "Record"}</Link>
+                    </p>
+                  ) : null}
                 </div>
-                {event.linkHref ? (
-                  <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] no-print">
-                    <Link href={event.linkHref}>{event.linkLabel ?? "Record"}</Link>
-                  </div>
-                ) : null}
               </div>
             ))}
           </div>
@@ -288,7 +310,14 @@ export default async function ReviewChronologyPage({
             No finalized academic activity has been recorded yet.
           </div>
         )}
-      </DocumentSection>
-    </FormalDocumentLayout>
+      </section>
+
+      {/* ─── Document footer ─── */}
+      <footer className="border-t border-[var(--border)] pt-4 text-xs text-[var(--muted)]">
+        <p>
+          {program.title} · Academic chronology · {events.length} events · Generated {now}
+        </p>
+      </footer>
+    </div>
   );
 }
