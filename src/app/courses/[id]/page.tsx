@@ -603,6 +603,7 @@ export default async function CoursePage({
             </div>
           </div>
           <div className="flex flex-wrap gap-4 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            <Link href={`/courses/${course.id}/readings`} className="hover:text-[var(--text)]">Reading list</Link>
             <Link href={`/courses/${course.id}/dossier`} className="hover:text-[var(--text)]">Course dossier</Link>
             {course.program?.id ? (
               <Link href={`/programs/${course.program.id}/audit`} className="hover:text-[var(--text)]">Program audit</Link>
